@@ -1,0 +1,18 @@
+{
+  "name": "battle-2d-eath",
+  "version": "0.1.0",
+  "description": "A 2D Battle Royale game built with vanilla JavaScript",
+  "type": "module",
+  "scripts": {
+    "dev": "npx live-server --port=8080 --no-browser --watch=src,styles,index.html",
+    "start": "python3 -m http.server 8080"
+  },
+  "keywords": [
+    "game",
+    "battle-royale",
+    "canvas",
+    "javascript"
+  ],
+  "author": "",
+  "license": "MIT"
+}
