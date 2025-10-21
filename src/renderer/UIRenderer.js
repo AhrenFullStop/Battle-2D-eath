@@ -45,12 +45,14 @@ export class UIRenderer {
             abilityButton.render(this.ctx, gameState.player.specialAbility.type);
         }
         
-        // Render health kit buttons (Phase 7)
-        if (healthKitButtons && gameState.player) {
-            healthKitButtons.forEach((button, index) => {
-                const hasHealthKit = index < gameState.player.healthKits;
-                button.render(this.ctx, hasHealthKit);
-            });
+        // Render health kit button (single consolidated button)
+        if (healthKitButtons && healthKitButtons.length > 0 && gameState.player) {
+            const healthKitCount = gameState.player.healthKits;
+            const maxHealthKits = 2;
+            const hasHealthKit = healthKitCount > 0;
+            
+            // Render only the first (and only) health kit button
+            healthKitButtons[0].render(this.ctx, hasHealthKit, healthKitCount, maxHealthKits);
         }
         
         // Render HUD
@@ -81,69 +83,165 @@ export class UIRenderer {
         ctx.restore();
     }
 
-    // Render HUD (health, etc.)
+    // Render HUD (health, game info, special pickups)
     renderHUD(gameState) {
         if (!gameState.player) return;
         
+        // Render game info panel (top-left)
+        this.renderGameInfoPanel(gameState);
+        
+        // Render vertical health bar (top-right, below minimap)
+        this.renderVerticalHealthBar(gameState);
+        
+        // Render special pickups slots (right side, below health bar)
+        this.renderSpecialPickups(gameState);
+    }
+    
+    // Render game info panel at top-left
+    renderGameInfoPanel(gameState) {
+        const ctx = this.ctx;
+        ctx.save();
+        
+        const panelX = 20;
+        const panelY = 30;
+        const lineHeight = 28;
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'left';
+        
+        // Safe zone timer
+        if (gameState.safeZoneSystem) {
+            const phaseInfo = gameState.safeZoneSystem.getCurrentPhaseInfo();
+            const timeUntilNext = phaseInfo.timeUntilNext;
+            
+            if (timeUntilNext > 0) {
+                const minutes = Math.floor(timeUntilNext / 60000);
+                const seconds = Math.floor((timeUntilNext % 60000) / 1000);
+                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                ctx.fillText(`⏱️ Zone: ${timeString}`, panelX, panelY);
+            } else {
+                ctx.fillText(`⏱️ Zone: Final`, panelX, panelY);
+            }
+        }
+        
+        // Remaining players
+        const aliveCount = gameState.characters.filter(c => !c.isDead).length;
+        ctx.fillText(`👥 Alive: ${aliveCount}`, panelX, panelY + lineHeight);
+        
+        // Kill count
+        const kills = gameState.matchStats.kills;
+        ctx.fillText(`⚔️ Kills: ${kills}`, panelX, panelY + lineHeight * 2);
+        
+        ctx.restore();
+    }
+    
+    // Render vertical health bar at top-right (below minimap)
+    renderVerticalHealthBar(gameState) {
         const ctx = this.ctx;
         const player = gameState.player;
         
         ctx.save();
         
-        // Draw player health in top-left corner
-        const hudX = 20;
-        const hudY = 30;
+        // Position below minimap on right side
+        const healthBarX = this.canvas.width - 50;
+        const barY = 190; // Below minimap
+        const healthBarWidth = 20;
+        const shieldBarWidth = 15;
+        const barHeight = 250;
         
-        // Health label
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px Arial';
-        ctx.fillText('HP:', hudX, hudY);
-        
-        // Health bar
-        const barWidth = 150;
-        const barHeight = 20;
-        const barX = hudX + 40;
-        const barY = hudY - 15;
-        
-        // Background (red)
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(barX, barY, barWidth, barHeight);
-        
-        // Health (green)
-        const healthWidth = barWidth * player.getHealthPercentage();
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(barX, barY, healthWidth, barHeight);
-        
-        // Shield (blue overlay) - if player has shield
+        // Shield bar (left side, thinner)
         if (player.shield > 0) {
-            const shieldPercentage = player.shield / 100; // Max shield is 100
-            const shieldWidth = barWidth * shieldPercentage;
-            ctx.fillStyle = 'rgba(0, 150, 255, 0.7)';
-            ctx.fillRect(barX, barY, shieldWidth, barHeight);
+            const shieldX = healthBarX - shieldBarWidth - 5;
+            
+            // Background (dark)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(shieldX, barY, shieldBarWidth, barHeight);
+            
+            // Shield (blue, fills from bottom)
+            const shieldPercentage = Math.min(player.shield / 100, 1); // Max shield is 100
+            const shieldHeight = barHeight * shieldPercentage;
+            ctx.fillStyle = '#0096ff';
+            ctx.fillRect(shieldX, barY + barHeight - shieldHeight, shieldBarWidth, shieldHeight);
+            
+            // Border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(shieldX, barY, shieldBarWidth, barHeight);
         }
+        
+        // Health bar (main bar)
+        // Background (dark)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(healthBarX, barY, healthBarWidth, barHeight);
+        
+        // Health (red, fills from bottom)
+        const healthPercentage = player.getHealthPercentage();
+        const healthHeight = barHeight * healthPercentage;
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(healthBarX, barY + barHeight - healthHeight, healthBarWidth, healthHeight);
         
         // Border
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.strokeRect(barX, barY, barWidth, barHeight);
+        ctx.strokeRect(healthBarX, barY, healthBarWidth, barHeight);
         
-        // Health text
+        // Health text (underneath bar, no rotation)
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px Arial';
+        ctx.font = 'bold 13px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(
-            `${Math.ceil(player.currentHP)} / ${player.maxHP}`,
-            barX + barWidth / 2,
-            barY + 14
-        );
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${Math.ceil(player.currentHP)}/${player.maxHP}`, healthBarX + healthBarWidth / 2, barY + barHeight + 8);
         
-        // Shield text (if has shield)
+        // Shield text (if has shield, underneath shield bar)
         if (player.shield > 0) {
+            const shieldX = healthBarX - shieldBarWidth - 5;
             ctx.fillStyle = '#00aaff';
             ctx.font = 'bold 12px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText(`+${Math.ceil(player.shield)}`, barX + barWidth + 5, barY + 14);
+            ctx.textAlign = 'center';
+            ctx.fillText(`${Math.ceil(player.shield)}`, shieldX + shieldBarWidth / 2, barY + barHeight + 8);
         }
+        
+        ctx.restore();
+    }
+    
+    // Render special pickups slots (2 circular icons above weapon slots)
+    renderSpecialPickups(gameState) {
+        const ctx = this.ctx;
+        
+        ctx.save();
+        
+        // Position above weapon slots on right side (within thumb's reach)
+        const iconRadius = 30;
+        const iconX = this.canvas.width - 60; // Aligned with health bar
+        const iconY1 = this.canvas.height - 480; // First slot (above weapons)
+        const iconY2 = this.canvas.height - 400; // Second slot
+        
+        // Slot 1
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#666666';
+        ctx.beginPath();
+        ctx.arc(iconX, iconY1, iconRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#888888';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Slot 2
+        ctx.beginPath();
+        ctx.arc(iconX, iconY2, iconRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Placeholder text
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('?', iconX, iconY1);
+        ctx.fillText('?', iconX, iconY2);
         
         ctx.restore();
     }
@@ -187,47 +285,10 @@ export class UIRenderer {
         }
     }
 
-    // Render safe zone phase timer
+    // Render safe zone phase timer (now integrated in game info panel)
     renderSafeZoneTimer(gameState) {
-        if (!gameState.safeZoneSystem) return;
-        
-        const phaseInfo = gameState.safeZoneSystem.getCurrentPhaseInfo();
-        const timeUntilNext = phaseInfo.timeUntilNext;
-        
-        // Only show timer if there's a next phase
-        if (timeUntilNext <= 0) return;
-        
-        const ctx = this.ctx;
-        ctx.save();
-        
-        // Position below minimap (centered at top)
-        const timerX = this.canvas.width / 2;
-        const timerY = 190; // Below minimap
-        
-        // Format time as MM:SS
-        const minutes = Math.floor(timeUntilNext / 60000);
-        const seconds = Math.floor((timeUntilNext % 60000) / 1000);
-        const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        // Draw semi-transparent background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(timerX - 80, timerY - 25, 160, 35);
-        
-        // Draw border
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(timerX - 80, timerY - 25, 160, 35);
-        
-        // Draw text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Next Zone:', timerX, timerY - 8);
-        
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText(timeString, timerX, timerY + 10);
-        
-        ctx.restore();
+        // Timer is now part of the game info panel at top-left
+        // This method is kept for compatibility but does nothing
     }
 
     // Render match end screen (game over or victory)

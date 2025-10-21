@@ -16,12 +16,12 @@ export const MAX_VELOCITY = 500;
 export const MAP_WIDTH = 3000;
 export const MAP_HEIGHT = 3000;
 
-// Virtual joystick settings
-export const JOYSTICK_RADIUS = 60;
-export const JOYSTICK_KNOB_RADIUS = 25;
-export const JOYSTICK_POSITION_X = 100;
-export const JOYSTICK_POSITION_Y = CANVAS_HEIGHT - 100;
-export const JOYSTICK_MAX_DISTANCE = 50;
+// Virtual joystick settings (20% larger)
+export const JOYSTICK_RADIUS = 80; 
+export const JOYSTICK_KNOB_RADIUS = 30; // Was 25, now 20% larger
+export const JOYSTICK_POSITION_X = 110;
+export const JOYSTICK_POSITION_Y = CANVAS_HEIGHT - 110;
+export const JOYSTICK_MAX_DISTANCE = 60; // Was 50, now 20% larger
 
 // Debug settings
 export const DEBUG_MODE = false;

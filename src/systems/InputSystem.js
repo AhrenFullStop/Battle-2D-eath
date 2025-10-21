@@ -15,21 +15,21 @@ export class InputSystem {
         // Virtual joystick for movement
         this.joystick = new VirtualJoystick();
         
-        // Phase 7: Special ability button (larger, bottom-right corner)
-        const abilityRadius = 55;
-        const abilityX = CANVAS_WIDTH - 80;
-        const abilityY = CANVAS_HEIGHT - 80;
+        // Special ability button (larger, bottom-right corner)
+        const abilityRadius = 60;
+        const abilityX = CANVAS_WIDTH - 90;
+        const abilityY = CANVAS_HEIGHT - 90;
         this.abilityButton = new AbilityButton(abilityX, abilityY, abilityRadius);
         
-        // Weapon buttons (positioned around ability button) - 3 slots
-        const weaponRadius = 45;
+        // Weapon buttons (positioned around ability button with better spacing) - 3 slots
+        const weaponRadius = 48;
         this.weaponButtons = [];
         
-        // Position weapons in an arc around the ability button
+        // Position weapons in an arc around the ability button with more spacing
         const weaponPositions = [
-            { x: abilityX - 120, y: abilityY }, // Left
-            { x: abilityX - 90, y: abilityY - 90 }, // Top-left
-            { x: abilityX, y: abilityY - 120 } // Top
+            { x: abilityX - 160, y: abilityY }, // Left 
+            { x: abilityX - 115, y: abilityY - 115 }, // Top-left 
+            { x: abilityX, y: abilityY - 160 } // Top 
         ];
         
         for (let i = 0; i < 3; i++) {
@@ -42,21 +42,20 @@ export class InputSystem {
             this.weaponButtons.push(button);
         }
         
-        // Health kit buttons (bottom center) - 2 slots
-        const healthKitRadius = 35;
-        const centerX = CANVAS_WIDTH / 2;
-        const healthKitY = CANVAS_HEIGHT - 60;
+        // Health kit button (single button, center-bottom area) - consolidated slot
+        const healthKitRadius = 40;
+        const healthKitX = (CANVAS_WIDTH / 2) - 20; // Centered horizontally
+        const healthKitY = CANVAS_HEIGHT - 80; // Bottom center
         this.healthKitButtons = [];
         
-        for (let i = 0; i < 2; i++) {
-            const button = new ConsumableButton(
-                centerX - 50 + (i * 100),
-                healthKitY,
-                healthKitRadius,
-                i
-            );
-            this.healthKitButtons.push(button);
-        }
+        // Only create one button that handles all health kits
+        const button = new ConsumableButton(
+            healthKitX,
+            healthKitY,
+            healthKitRadius,
+            0 // Single slot index
+        );
+        this.healthKitButtons.push(button);
         
         // Track active touches
         this.touches = new Map();
@@ -131,14 +130,11 @@ export class InputSystem {
                 }
             }
             
-            // Try health kit buttons
+            // Try health kit button (single button)
             if (!handled) {
-                for (let j = 0; j < this.healthKitButtons.length; j++) {
-                    if (this.healthKitButtons[j].onTouchStart(touch.identifier, coords.x, coords.y)) {
-                        this.touches.set(touch.identifier, { type: 'healthKit', index: j, coords });
-                        handled = true;
-                        break;
-                    }
+                if (this.healthKitButtons[0].onTouchStart(touch.identifier, coords.x, coords.y)) {
+                    this.touches.set(touch.identifier, { type: 'healthKit', index: 0, coords });
+                    handled = true;
                 }
             }
             
@@ -198,7 +194,7 @@ export class InputSystem {
                         this.abilityActivated = true;
                     }
                 } else if (touchData.type === 'healthKit') {
-                    const button = this.healthKitButtons[touchData.index];
+                    const button = this.healthKitButtons[0]; // Only one button now
                     const shouldUse = button.onTouchEnd(touch.identifier);
                     if (shouldUse) {
                         this.healthKitUsed = true;

@@ -8,14 +8,15 @@ export class MinimapRenderer {
         
         // Minimap configuration
         this.minimapSize = 150; // Size of minimap
-        this.minimapX = 0; // Will be set to center top
+        this.minimapX = 0; // Will be set to top-right
         this.minimapY = 20; // Top of screen with padding
         this.minimapPadding = 10;
+        this.cornerRadius = 15; // Rounded corners for minimap
     }
 
     render(gameState, canvasWidth) {
-        // Center the minimap at top of screen
-        this.minimapX = (canvasWidth - this.minimapSize) / 2;
+        // Position minimap at top-right corner
+        this.minimapX = canvasWidth - this.minimapSize - 20;
         
         // Draw minimap background
         this.drawMinimapBackground();
@@ -37,14 +38,19 @@ export class MinimapRenderer {
     }
 
     drawMinimapBackground() {
-        // Semi-transparent dark background
+        // Semi-transparent dark background with rounded corners
+        this.ctx.save();
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(
+        this.roundRect(
+            this.ctx,
             this.minimapX,
             this.minimapY,
             this.minimapSize,
-            this.minimapSize
+            this.minimapSize,
+            this.cornerRadius
         );
+        this.ctx.fill();
+        this.ctx.restore();
     }
 
     drawMinimapBoundary() {
@@ -197,15 +203,35 @@ export class MinimapRenderer {
     }
 
     drawMinimapBorder() {
-        // Draw border around minimap
+        // Draw border around minimap with rounded corners
+        this.ctx.save();
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(
+        this.roundRect(
+            this.ctx,
             this.minimapX,
             this.minimapY,
             this.minimapSize,
-            this.minimapSize
+            this.minimapSize,
+            this.cornerRadius
         );
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+    
+    // Helper to draw rounded rectangle
+    roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
     }
 
     // Helper to check if character is in a bush

@@ -49,8 +49,8 @@ export class ConsumableButton {
         this.pressed = false;
     }
     
-    // Render the button
-    render(ctx, hasHealthKit) {
+    // Render the button with health kit count
+    render(ctx, hasHealthKit, healthKitCount = 0, maxHealthKits = 2) {
         ctx.save();
         
         // Draw button base
@@ -77,6 +77,13 @@ export class ConsumableButton {
             // Horizontal line
             ctx.fillRect(this.x - crossSize, this.y - 2, crossSize * 2, 4);
         }
+        
+        // Draw health kit count label (e.g., "1/2")
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${healthKitCount}/${maxHealthKits}`, this.x, this.y + this.radius + 20);
         
         ctx.restore();
     }
