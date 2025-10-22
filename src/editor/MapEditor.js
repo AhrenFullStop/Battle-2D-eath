@@ -27,6 +27,11 @@ export class MapEditor {
         this.defaultObstacleWidth = 80;
         this.defaultObstacleHeight = 80;
         this.defaultWaterRadius = 120;
+        
+        // Background image
+        this.backgroundImage = null;
+        this.backgroundImageLoaded = false;
+        this.lastBackgroundPath = null;
     }
     
     setTool(tool) {
@@ -43,6 +48,43 @@ export class MapEditor {
     
     setBackground(background) {
         this.mapData.background = background;
+        this.loadBackgroundImage();
+    }
+    
+    loadBackgroundImage() {
+        // Only load if background is an image type
+        if (this.mapData.background?.type === 'image') {
+            const imagePath = `maps/backgrounds/${this.mapData.background.value}`;
+            
+            // Only load if it's a different image
+            if (this.lastBackgroundPath !== imagePath) {
+                this.lastBackgroundPath = imagePath;
+                this.backgroundImageLoaded = false;
+                this.backgroundImage = new Image();
+                this.backgroundImage.onload = () => {
+                    this.backgroundImageLoaded = true;
+                    console.log('Editor background image loaded:', imagePath);
+                };
+                this.backgroundImage.onerror = () => {
+                    console.error('Failed to load editor background image:', imagePath);
+                    this.backgroundImageLoaded = false;
+                    this.backgroundImage = null;
+                };
+                this.backgroundImage.src = imagePath;
+            }
+        } else {
+            // Reset if not using image background
+            this.lastBackgroundPath = null;
+            this.backgroundImage = null;
+            this.backgroundImageLoaded = false;
+        }
+    }
+    
+    getBackgroundImage() {
+        return {
+            image: this.backgroundImage,
+            loaded: this.backgroundImageLoaded
+        };
     }
     
     getMapData() {
@@ -59,6 +101,7 @@ export class MapEditor {
             waterAreas: data.waterAreas || []
         };
         this.mapRadius = this.mapData.radius;
+        this.loadBackgroundImage();
     }
     
     clearMap() {

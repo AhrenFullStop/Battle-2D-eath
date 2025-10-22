@@ -55,6 +55,9 @@ export class MapRenderer {
         // Draw safe zone boundary (for Phase 6, but set up now)
         this.drawSafeZone(camera, gameState);
         
+        // Set terrain opacity to 20% so background shows through
+        this.ctx.globalAlpha = 0.2;
+        
         // Draw water areas
         this.drawWaterAreas(camera);
         
@@ -63,6 +66,9 @@ export class MapRenderer {
         
         // Draw bushes
         this.drawBushes(camera);
+        
+        // Reset opacity to full for other elements
+        this.ctx.globalAlpha = 1.0;
         
         // Draw consumables (Phase 7)
         if (consumables) {

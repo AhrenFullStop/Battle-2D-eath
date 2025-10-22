@@ -22,8 +22,7 @@ export class EditorUI {
             { action: 'import', label: 'Import', x: 240, y: 70, width: 100, height: 40 },
             { action: 'zoom_in', label: 'Zoom +', x: 350, y: 70, width: 80, height: 40 },
             { action: 'zoom_out', label: 'Zoom -', x: 440, y: 70, width: 80, height: 40 },
-            { action: 'background', label: 'BG Color', x: 530, y: 70, width: 100, height: 40 },
-            { action: 'bg_image', label: 'BG Image', x: 640, y: 70, width: 100, height: 40 }
+            { action: 'background', label: 'BG Color', x: 530, y: 70, width: 100, height: 40 }
         ];
         
         // Available background colors
@@ -38,6 +37,10 @@ export class EditorUI {
         ];
         this.currentBackgroundIndex = 0;
         
+        // Available background images (loaded from manifest)
+        this.backgroundImages = [];
+        this.loadBackgroundImages();
+        
         // UI visibility toggle
         this.showUI = true;
         
@@ -48,6 +51,152 @@ export class EditorUI {
         // Mouse position in world coordinates
         this.mouseWorldX = 0;
         this.mouseWorldY = 0;
+        
+        // Create background selector dropdown
+        this.createBackgroundSelector();
+    }
+    
+    async loadBackgroundImages() {
+        try {
+            const response = await fetch('maps/manifest.json');
+            const manifest = await response.json();
+            
+            // Extract unique background images from maps
+            const imageSet = new Set();
+            manifest.maps.forEach(map => {
+                if (map.background?.type === 'image') {
+                    imageSet.add(map.background.value);
+                }
+            });
+            
+            // Convert to array with display names
+            this.backgroundImages = Array.from(imageSet).map(filename => ({
+                name: filename.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/_/g, ' '),
+                file: filename
+            }));
+            
+            // Update dropdown if it exists
+            if (this.backgroundSelect) {
+                this.updateBackgroundDropdown();
+            }
+            
+            console.log('Loaded background images:', this.backgroundImages);
+        } catch (error) {
+            console.error('Error loading background images from manifest:', error);
+            this.backgroundImages = [];
+        }
+    }
+    
+    createBackgroundSelector() {
+        const container = document.createElement('div');
+        container.id = 'backgroundSelectorContainer';
+        container.style.position = 'absolute';
+        container.style.top = '70px';
+        container.style.left = '640px';
+        container.style.zIndex = '1000';
+        container.style.pointerEvents = 'auto';
+        
+        const label = document.createElement('label');
+        label.textContent = 'Background: ';
+        label.style.color = '#ffffff';
+        label.style.fontSize = '14px';
+        label.style.fontFamily = 'Arial';
+        label.style.marginRight = '5px';
+        
+        const select = document.createElement('select');
+        select.id = 'backgroundSelect';
+        select.style.padding = '8px';
+        select.style.fontSize = '14px';
+        select.style.backgroundColor = '#374151';
+        select.style.color = '#ffffff';
+        select.style.border = '2px solid #6b7280';
+        select.style.borderRadius = '4px';
+        select.style.cursor = 'pointer';
+        select.style.minWidth = '150px';
+        
+        // Add "None" option
+        const noneOption = document.createElement('option');
+        noneOption.value = '';
+        noneOption.textContent = 'None';
+        select.appendChild(noneOption);
+        
+        // Add "Color Background" optgroup
+        const colorGroup = document.createElement('optgroup');
+        colorGroup.label = 'Color Backgrounds';
+        this.backgroundColors.forEach(bg => {
+            const option = document.createElement('option');
+            option.value = `color:${bg.value}`;
+            option.textContent = bg.name;
+            colorGroup.appendChild(option);
+        });
+        select.appendChild(colorGroup);
+        
+        // Will add image backgrounds when loaded
+        this.backgroundSelect = select;
+        this.updateBackgroundDropdown();
+        
+        select.addEventListener('change', (e) => {
+            this.handleBackgroundChange(e.target.value);
+        });
+        
+        container.appendChild(label);
+        container.appendChild(select);
+        document.body.appendChild(container);
+        
+        console.log('Background selector created');
+    }
+    
+    updateBackgroundDropdown() {
+        if (!this.backgroundSelect) return;
+        
+        // Remove existing image group if present
+        const existingImageGroup = this.backgroundSelect.querySelector('optgroup[label="Image Backgrounds"]');
+        if (existingImageGroup) {
+            existingImageGroup.remove();
+        }
+        
+        // Add image backgrounds if available
+        if (this.backgroundImages.length > 0) {
+            const imageGroup = document.createElement('optgroup');
+            imageGroup.label = 'Image Backgrounds';
+            this.backgroundImages.forEach(bg => {
+                const option = document.createElement('option');
+                option.value = `image:${bg.file}`;
+                option.textContent = bg.name;
+                imageGroup.appendChild(option);
+            });
+            this.backgroundSelect.appendChild(imageGroup);
+        }
+    }
+    
+    handleBackgroundChange(value) {
+        if (!value) {
+            // None selected - use default gray
+            this.editor.setBackground({ type: 'color', value: '#2d3748' });
+        } else if (value.startsWith('color:')) {
+            // Color background
+            const color = value.substring(6);
+            this.editor.setBackground({ type: 'color', value: color });
+        } else if (value.startsWith('image:')) {
+            // Image background
+            const filename = value.substring(6);
+            this.editor.setBackground({ type: 'image', value: filename });
+        }
+        console.log('Background changed to:', value);
+    }
+    
+    syncBackgroundSelector() {
+        if (!this.backgroundSelect) return;
+        
+        const mapData = this.editor.getMapData();
+        const bg = mapData.background;
+        
+        if (!bg || bg.type === 'color') {
+            const color = bg?.value || '#2d3748';
+            this.backgroundSelect.value = `color:${color}`;
+        } else if (bg.type === 'image') {
+            this.backgroundSelect.value = `image:${bg.value}`;
+        }
     }
     
     updateMousePosition(screenX, screenY) {
@@ -232,7 +381,7 @@ export class EditorUI {
         y += 16;
         ctx.fillText('• Arrow keys/WASD to pan, +/- or H to toggle UI', 30, y);
         y += 16;
-        ctx.fillText('• BG Color button cycles background colors', 30, y);
+        ctx.fillText('• Use Background dropdown to select image/color', 30, y);
         y += 16;
         ctx.fillText('• Export to save your map as JSON', 30, y);
     }

@@ -14,7 +14,7 @@ class EditorApp {
         
         // Initialize editor components
         this.editor = new MapEditor();
-        this.camera = { x: 400, y: 400, zoom: 0.7 }; // Start zoomed out and centered
+        this.camera = { x: 400, y: 400, zoom: 0.3 }; // Start zoomed out and centered
         this.ui = new EditorUI(this.canvas, this.ctx, this.editor, this.camera);
         
         // Camera panning
@@ -259,10 +259,6 @@ class EditorApp {
             case 'background':
                 this.ui.cycleBackground();
                 break;
-                
-            case 'bg_image':
-                this.selectBackgroundImage();
-                break;
         }
     }
     
@@ -301,6 +297,8 @@ class EditorApp {
                 reader.onload = (event) => {
                     const success = this.editor.importFromJSON(event.target.result);
                     if (success) {
+                        // Sync the background dropdown with imported map
+                        this.ui.syncBackgroundSelector();
                         alert('Map imported successfully!');
                     } else {
                         alert('Error importing map. Please check the JSON format.');
@@ -311,16 +309,6 @@ class EditorApp {
         };
         
         input.click();
-    }
-    
-    selectBackgroundImage() {
-        const filename = prompt('Enter background image filename (place in maps/backgrounds/):\nExample: grass.png, desert.jpg', 'background.png');
-        
-        if (filename) {
-            this.editor.setBackground({ type: 'image', value: filename });
-            console.log('Background image set to:', filename);
-            alert(`Background set to: ${filename}\n\nReminder: Place the image file in maps/backgrounds/ folder for it to work in the game.`);
-        }
     }
     
     render() {
@@ -341,26 +329,45 @@ class EditorApp {
         // Get map data
         const mapData = this.editor.getMapData();
         
-        // Map background with configured color
-        const bgColor = mapData.background?.value || '#2d3748';
-        this.ctx.fillStyle = bgColor;
-        this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        this.ctx.fill();
+        // Get background image if available
+        const bgImage = this.editor.getBackgroundImage();
         
-        // Map border
+        // Render background (image or color)
+        if (mapData.background?.type === 'image' && bgImage.loaded && bgImage.image) {
+            // Draw background image scaled to map circle
+            const size = radius * 2;
+            this.ctx.drawImage(
+                bgImage.image,
+                centerX - radius,
+                centerY - radius,
+                size,
+                size
+            );
+        } else {
+            // Map background with configured color
+            const bgColor = mapData.background?.value || '#2d3748';
+            this.ctx.fillStyle = bgColor;
+            this.ctx.beginPath();
+            this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Map border (full opacity)
         this.ctx.strokeStyle = '#ffffff';
         this.ctx.lineWidth = 4;
         this.ctx.beginPath();
         this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         this.ctx.stroke();
         
-        // Draw grid
+        // Draw grid (full opacity)
         this.drawGrid(centerX, centerY, radius);
+        
+        // Set terrain opacity to 20%
+        this.ctx.globalAlpha = 0.2;
         
         // Draw water areas
         mapData.waterAreas.forEach(water => {
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
             this.ctx.beginPath();
             this.ctx.arc(water.x, water.y, water.radius, 0, Math.PI * 2);
             this.ctx.fill();
@@ -390,7 +397,7 @@ class EditorApp {
         
         // Draw bushes
         mapData.bushes.forEach(bush => {
-            this.ctx.fillStyle = 'rgba(34, 197, 94, 0.6)';
+            this.ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
             this.ctx.beginPath();
             this.ctx.arc(bush.x, bush.y, bush.radius, 0, Math.PI * 2);
             this.ctx.fill();
@@ -398,6 +405,9 @@ class EditorApp {
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
         });
+        
+        // Reset opacity to full for cursor preview
+        this.ctx.globalAlpha = 1.0;
         
         // Draw cursor preview
         this.drawCursorPreview();
