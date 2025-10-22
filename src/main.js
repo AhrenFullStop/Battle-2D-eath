@@ -21,7 +21,8 @@ import { CHARACTERS } from './config/characters.js';
 import { createWeapon } from './config/weapons.js';
 import { createConsumable } from './config/consumables.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config/constants.js';
-import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig } from './config/map.js';
+import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig, getGameConfig } from './config/map.js';
+import { generateAISkills, generateAICharacterTypes, generateWeaponTier } from './config/gameConfig.js';
 import { Vector2D } from './utils/Vector2D.js';
 
 class Game {
@@ -170,6 +171,10 @@ class Game {
         // Get the current map config (either loaded or default)
         const mapConfig = getCurrentMapConfig();
         
+        // Get game configuration (with fallback to defaults)
+        const gameConfig = getGameConfig();
+        console.log('Game config:', gameConfig);
+        
         // Create player character with selected character type
         const characterConfig = { ...CHARACTERS[this.selectedCharacter], isPlayer: true };
         const player = new Player(characterConfig);
@@ -184,14 +189,14 @@ class Game {
         // Add player to game state
         this.gameState.addCharacter(player);
         
-        // Create 7 AI opponents (mix of characters and skill levels)
-        const aiCount = 7;
-        const characterTypes = ['bolt', 'boulder'];
-        const skillLevels = ['novice', 'novice', 'novice', 'novice', 'intermediate', 'intermediate', 'expert'];
+        // Create AI opponents (count and distribution from config)
+        const aiCount = gameConfig.match.aiCount;
+        const characterTypes = generateAICharacterTypes(gameConfig.ai.characterDistribution, aiCount);
+        const skillLevels = generateAISkills(gameConfig.ai.skillDistribution, aiCount);
         
         for (let i = 0; i < aiCount; i++) {
-            const characterType = characterTypes[i % characterTypes.length];
-            const skillLevel = skillLevels[i % skillLevels.length];
+            const characterType = characterTypes[i];
+            const skillLevel = skillLevels[i];
             
             const aiConfig = {
                 ...CHARACTERS[characterType],
@@ -210,39 +215,59 @@ class Game {
             console.log(`AI ${i + 1} spawned: ${aiOpponent.name} (${skillLevel}) at (${Math.round(spawnPoint.x)}, ${Math.round(spawnPoint.y)})`);
         }
         
-        // Spawn weapons across the map (reduced count for performance)
+        // Spawn weapons across the map (count from config)
         const weaponTypes = ['blaster', 'spear', 'bomb', 'gun'];
         const weaponSpawns = [];
+        const weaponCount = gameConfig.loot.initialWeapons;
         
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < weaponCount; i++) {
             const angle = (i / 8) * Math.PI * 2;
             const distance = 400 + Math.random() * 500;
-            const x = mapConfig.centerX + Math.cos(angle) * distance;
-            const y = mapConfig.centerY + Math.sin(angle) * distance;
-            const type = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
-            const tier = Math.random() < 0.6 ? 1 : (Math.random() < 0.8 ? 2 : 3);
+            let x = mapConfig.centerX + Math.cos(angle) * distance;
+            let y = mapConfig.centerY + Math.sin(angle) * distance;
             
-            weaponSpawns.push({ pos: new Vector2D(x, y), type, tier });
-            this.aiSystem.spawnWeapon(new Vector2D(x, y), type, tier);
+            // Find valid spawn position (not on obstacles)
+            const validPos = this.findValidSpawnPosition(x, y, mapConfig, 30);
+            if (validPos) {
+                x = validPos.x;
+                y = validPos.y;
+                
+                const type = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
+                const tier = generateWeaponTier(gameConfig.loot.weaponTierRatios);
+                
+                weaponSpawns.push({ pos: new Vector2D(x, y), type, tier });
+                this.aiSystem.spawnWeapon(new Vector2D(x, y), type, tier);
+            }
         }
         
-        // Spawn consumables across the map (Phase 7)
+        // Spawn consumables across the map (count from config)
         const consumableTypes = ['healthKit', 'shieldPotion'];
-        for (let i = 0; i < 6; i++) {
+        const consumableCount = gameConfig.loot.initialConsumables;
+        
+        for (let i = 0; i < consumableCount; i++) {
             const angle = (i / 6) * Math.PI * 2 + Math.PI / 12;
             const distance = 300 + Math.random() * 600;
-            const x = mapConfig.centerX + Math.cos(angle) * distance;
-            const y = mapConfig.centerY + Math.sin(angle) * distance;
-            const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
+            let x = mapConfig.centerX + Math.cos(angle) * distance;
+            let y = mapConfig.centerY + Math.sin(angle) * distance;
             
-            const consumable = new Consumable(createConsumable(type));
-            consumable.setPosition(x, y);
-            this.consumables.push(consumable);
+            // Find valid spawn position (not on obstacles)
+            const validPos = this.findValidSpawnPosition(x, y, mapConfig, 30);
+            if (validPos) {
+                x = validPos.x;
+                y = validPos.y;
+                
+                const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
+                
+                const consumable = new Consumable(createConsumable(type));
+                consumable.setPosition(x, y);
+                this.consumables.push(consumable);
+            }
         }
         
         console.log('Player created:', player.name);
         console.log('Starting weapon:', blasterWeapon.name);
-        console.log(`${aiCount} AI opponents spawned with mixed characters and skill levels`);
+        console.log(`${aiCount} AI opponents spawned (${characterTypes.filter(t => t === 'bolt').length} Bolt, ${characterTypes.filter(t => t === 'boulder').length} Boulder)`);
+        console.log(`Skill levels: ${skillLevels.filter(s => s === 'novice').length} novice, ${skillLevels.filter(s => s === 'intermediate').length} intermediate, ${skillLevels.filter(s => s === 'expert').length} expert`);
         console.log(`${weaponSpawns.length} weapons spawned across the map`);
         console.log(`${this.consumables.length} consumables spawned (health kits and shield potions)`);
         console.log(`Map: ${mapConfig.name || 'Random Arena'}`);
@@ -498,6 +523,57 @@ class Game {
         if (this.renderer) {
             this.renderer.resize();
         }
+    }
+    
+    // Find valid spawn position not on obstacles
+    findValidSpawnPosition(x, y, mapConfig, clearanceRadius = 30, maxAttempts = 10) {
+        // Check if position overlaps with any obstacle
+        const checkPosition = (checkX, checkY) => {
+            for (const obstacle of mapConfig.obstacles) {
+                // Calculate obstacle bounds
+                const obstacleLeft = obstacle.position.x - obstacle.width / 2;
+                const obstacleRight = obstacle.position.x + obstacle.width / 2;
+                const obstacleTop = obstacle.position.y - obstacle.height / 2;
+                const obstacleBottom = obstacle.position.y + obstacle.height / 2;
+                
+                // Check if spawn position is too close to obstacle (with clearance)
+                if (checkX + clearanceRadius > obstacleLeft &&
+                    checkX - clearanceRadius < obstacleRight &&
+                    checkY + clearanceRadius > obstacleTop &&
+                    checkY - clearanceRadius < obstacleBottom) {
+                    return false; // Overlaps with obstacle
+                }
+            }
+            return true; // Valid position
+        };
+        
+        // Try original position first
+        if (checkPosition(x, y)) {
+            return { x, y };
+        }
+        
+        // Try nearby positions in a spiral pattern
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const radius = attempt * 50; // Expand search radius
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+                const testX = x + Math.cos(angle) * radius;
+                const testY = y + Math.sin(angle) * radius;
+                
+                // Make sure it's still within map bounds
+                const distFromCenter = Math.sqrt(
+                    Math.pow(testX - mapConfig.centerX, 2) +
+                    Math.pow(testY - mapConfig.centerY, 2)
+                );
+                
+                if (distFromCenter < mapConfig.radius - 100 && checkPosition(testX, testY)) {
+                    return { x: testX, y: testY };
+                }
+            }
+        }
+        
+        // If all attempts fail, return null (skip this spawn)
+        console.warn(`Could not find valid spawn position near (${Math.round(x)}, ${Math.round(y)})`);
+        return null;
     }
 }
 

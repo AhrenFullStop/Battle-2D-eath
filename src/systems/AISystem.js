@@ -5,7 +5,7 @@ import { Weapon, WeaponPickup } from '../entities/Weapon.js';
 import { Consumable } from '../entities/Consumable.js';
 import { createWeapon } from '../config/weapons.js';
 import { createConsumable } from '../config/consumables.js';
-import { MAP_CONFIG } from '../config/map.js';
+import { MAP_CONFIG, getCurrentMapConfig, getGameConfig } from '../config/map.js';
 
 export class AISystem {
     constructor(gameState, eventBus, combatSystem) {
@@ -16,8 +16,9 @@ export class AISystem {
         // Available weapons for AI to pick up
         this.availableWeapons = [];
         
-        // Max weapons allowed on map for performance
-        this.maxWeapons = 15;
+        // Max weapons allowed on map (from game config)
+        const gameConfig = getGameConfig();
+        this.maxWeapons = gameConfig.loot.maxWeaponsOnMap;
         
         // Listen for character death events
         this.eventBus.on('characterDamaged', (data) => this.onCharacterDamaged(data));
@@ -26,13 +27,15 @@ export class AISystem {
     // Update all AI characters
     update(deltaTime) {
         // Get all AI characters
-        const aiCharacters = this.gameState.characters.filter(char => 
+        const aiCharacters = this.gameState.characters.filter(char =>
             !char.isPlayer && !char.isDead && char.aiState !== undefined
         );
         
         // Update each AI
         aiCharacters.forEach(ai => {
             this.updateAI(ai, deltaTime);
+            // Check health kit usage every update
+            this.useHealthKitIfNeeded(ai);
         });
     }
     
@@ -96,6 +99,14 @@ export class AISystem {
             }
         }
         
+        // Look for nearby health kits if damaged and has room
+        const needsHealing = ai.currentHP < ai.maxHP * 0.7; // Below 70% health
+        const hasRoomForHealthKit = ai.healthKits < ai.maxHealthKits;
+        
+        if (needsHealing && hasRoomForHealthKit && !ai.targetConsumable) {
+            this.findNearestHealthKit(ai);
+        }
+        
         // Look for nearby weapons if AI doesn't have max weapons and not currently targeting one
         if (ai.weapons.length < ai.maxWeapons && !ai.targetWeapon) {
             this.findNearestWeapon(ai);
@@ -120,13 +131,21 @@ export class AISystem {
             return;
         }
         
-        // Priority 2: Combat if enemy detected and has weapon
+        // Priority 2: Seek health kit if damaged and found one
+        const needsHealing = ai.currentHP < ai.maxHP * 0.5; // Below 50% health
+        const hasRoomForHealthKit = ai.healthKits < ai.maxHealthKits;
+        if (needsHealing && hasRoomForHealthKit && ai.targetConsumable) {
+            ai.setState('seekLoot');
+            return;
+        }
+        
+        // Priority 3: Combat if enemy detected and has weapon
         if (ai.targetEnemy && ai.weapons.length > 0) {
             ai.setState('combat');
             return;
         }
         
-        // Priority 3: Seek weapon if don't have max weapons and found a target
+        // Priority 4: Seek weapon if don't have max weapons and found a target
         if (ai.weapons.length < ai.maxWeapons && ai.targetWeapon && ai.targetWeapon.active) {
             ai.setState('seekLoot');
             return;
@@ -140,6 +159,17 @@ export class AISystem {
     executePatrol(ai, deltaTime) {
         // Check if AI is stuck on obstacle
         this.checkIfStuck(ai, deltaTime);
+        
+        // Add movement variation - 10% chance per second to change speed/direction
+        if (!ai.moveSpeedMultiplier) ai.moveSpeedMultiplier = 1.0;
+        if (!ai.lastVariationChange) ai.lastVariationChange = 0;
+        
+        ai.lastVariationChange += deltaTime;
+        if (ai.lastVariationChange > 1.0 && Math.random() < 0.1) {
+            // Random speed variation (70-130%)
+            ai.moveSpeedMultiplier = 0.7 + Math.random() * 0.6;
+            ai.lastVariationChange = 0;
+        }
         
         // Check if near boundary and need to turn away
         const avoidDirection = this.getAvoidBoundaryDirection(ai);
@@ -160,9 +190,10 @@ export class AISystem {
             wanderDirection.normalize();
         }
         
-        // Set velocity for wandering
-        ai.velocity.x = wanderDirection.x * ai.moveSpeed * 0.5; // Slower when patrolling
-        ai.velocity.y = wanderDirection.y * ai.moveSpeed * 0.5;
+        // Set velocity for wandering with variation
+        const patrolSpeed = ai.moveSpeed * 0.5 * ai.moveSpeedMultiplier;
+        ai.velocity.x = wanderDirection.x * patrolSpeed;
+        ai.velocity.y = wanderDirection.y * patrolSpeed;
         
         // Update facing angle
         if (ai.velocity.magnitude() > 0.1) {
@@ -172,31 +203,70 @@ export class AISystem {
     
     // Execute seek loot behavior
     executeSeekLoot(ai, deltaTime) {
-        if (!ai.targetWeapon || !ai.targetWeapon.active) {
+        // Determine what we're seeking - health kit or weapon
+        const targetItem = ai.targetConsumable || ai.targetWeapon;
+        
+        if (!targetItem || (ai.targetWeapon && !ai.targetWeapon.active)) {
+            ai.setState('patrol');
+            ai.pickupAttemptStart = null;
+            ai.targetConsumable = null;
+            return;
+        }
+        
+        // Track pickup timeout to prevent getting stuck
+        if (!ai.pickupAttemptStart) {
+            ai.pickupAttemptStart = Date.now();
+        } else if (Date.now() - ai.pickupAttemptStart > 3000) {
+            // Been trying to pickup for 3+ seconds, give up
+            console.log(`AI ${ai.name} gave up on ${ai.targetConsumable ? 'consumable' : 'weapon'} pickup (timeout)`);
+            ai.setTargetWeapon(null);
+            ai.targetConsumable = null;
+            ai.pickupAttemptStart = null;
             ai.setState('patrol');
             return;
         }
         
-        // Move towards weapon
+        // Move towards target item
         const direction = new Vector2D(
-            ai.targetWeapon.position.x - ai.position.x,
-            ai.targetWeapon.position.y - ai.position.y
+            targetItem.position.x - ai.position.x,
+            targetItem.position.y - ai.position.y
         );
         
         const distance = direction.magnitude();
         
-        // Try to pick up weapon (with timer) - only if in range
-        if (ai.targetWeapon.isInRange(ai)) {
-            const pickupComplete = ai.targetWeapon.updatePickup(ai, deltaTime);
-            if (pickupComplete) {
-                const success = this.pickupWeapon(ai, ai.targetWeapon);
-                ai.setTargetWeapon(null);
+        // Try to pick up item if in range
+        if (distance < 30) {
+            if (ai.targetConsumable) {
+                // Try to pick up consumable
+                const consumable = ai.targetConsumable;
+                if (consumable.consumableType === 'healthKit' && ai.canCarryHealthKit()) {
+                    ai.addHealthKit();
+                    consumable.active = false;
+                    // Remove from game state
+                    const index = this.gameState.consumables.indexOf(consumable);
+                    if (index > -1) {
+                        this.gameState.consumables.splice(index, 1);
+                    }
+                    console.log(`AI ${ai.name} picked up health kit (now has ${ai.healthKits})`);
+                }
+                ai.targetConsumable = null;
+                ai.pickupAttemptStart = null;
                 ai.setState('patrol');
                 return;
+            } else if (ai.targetWeapon && ai.targetWeapon.isInRange(ai)) {
+                // Try to pick up weapon (with timer)
+                const pickupComplete = ai.targetWeapon.updatePickup(ai, deltaTime);
+                if (pickupComplete) {
+                    const success = this.pickupWeapon(ai, ai.targetWeapon);
+                    ai.setTargetWeapon(null);
+                    ai.pickupAttemptStart = null;
+                    ai.setState('patrol');
+                    return;
+                }
             }
         }
         
-        // Move towards weapon if not in range yet
+        // Move towards item if not in range yet
         if (distance > 25) {
             direction.normalize();
             ai.velocity.x = direction.x * ai.moveSpeed;
@@ -353,7 +423,7 @@ export class AISystem {
         
         const safeZoneInfo = this.gameState.safeZoneSystem.getSafeZoneInfo();
         
-        // Calculate direction to safe zone center
+        // Calculate direction to safe zone center (move to center, not just to edge)
         const directionToCenter = new Vector2D(
             safeZoneInfo.centerX - ai.position.x,
             safeZoneInfo.centerY - ai.position.y
@@ -361,14 +431,14 @@ export class AISystem {
         
         const distanceToCenter = directionToCenter.magnitude();
         
-        // Only switch back to patrol when comfortably inside safe zone (70% of radius)
-        // This prevents NPCs from oscillating on the boundary
-        if (distanceToCenter <= safeZoneInfo.currentRadius * 0.7) {
+        // Only switch back to patrol when near center (30% of radius from center)
+        // This ensures NPCs move to center, not just to edge
+        if (distanceToCenter <= safeZoneInfo.currentRadius * 0.3) {
             ai.setState('patrol');
             return;
         }
         
-        // Move at full speed towards safe zone
+        // Move at full speed towards safe zone center
         directionToCenter.normalize();
         
         // Add unstuck vector if AI is stuck (more aggressive)
@@ -377,8 +447,13 @@ export class AISystem {
             directionToCenter.normalize();
         }
         
-        ai.velocity.x = directionToCenter.x * ai.moveSpeed * 1.2; // 20% faster when escaping zone
-        ai.velocity.y = directionToCenter.y * ai.moveSpeed * 1.2;
+        // Add urgency based on distance from safe zone edge
+        const distanceFromEdge = safeZoneInfo.currentRadius - distanceToCenter;
+        const urgencyMultiplier = distanceFromEdge < 0 ?
+            Math.min(2.0, 1.2 + Math.abs(distanceFromEdge) / safeZoneInfo.currentRadius) : 1.2;
+        
+        ai.velocity.x = directionToCenter.x * ai.moveSpeed * urgencyMultiplier;
+        ai.velocity.y = directionToCenter.y * ai.moveSpeed * urgencyMultiplier;
         ai.facingAngle = directionToCenter.angle();
         
         // Still fire at enemies if they're in the way
@@ -498,14 +573,8 @@ export class AISystem {
             
             const config = weapon.getWeaponConfig();
             
-            // Skip if AI already has this exact weapon
-            if (ai.hasWeapon(config.type, config.tier)) {
-                return;
-            }
-            
-            // Skip if AI has same type with higher tier
-            const sameTypeIndex = ai.findSameWeaponTypeIndex(config.type);
-            if (sameTypeIndex !== -1 && ai.weapons[sameTypeIndex].tier >= config.tier) {
+            // Check if AI can actually pick up this weapon
+            if (!this.canPickupWeapon(ai, weapon)) {
                 return;
             }
             
@@ -521,6 +590,87 @@ export class AISystem {
         } else {
             ai.setTargetWeapon(null);
         }
+    }
+    
+    // Find nearest health kit for AI
+    findNearestHealthKit(ai) {
+        if (!this.gameState.consumables || this.gameState.consumables.length === 0) {
+            ai.targetConsumable = null;
+            return;
+        }
+        
+        let nearestHealthKit = null;
+        let nearestDistance = Infinity;
+        
+        this.gameState.consumables.forEach(consumable => {
+            if (!consumable.active || consumable.consumableType !== 'healthKit') return;
+            
+            const distance = ai.position.distanceTo(consumable.position);
+            if (distance < nearestDistance && distance < ai.perceptionRange) {
+                nearestDistance = distance;
+                nearestHealthKit = consumable;
+            }
+        });
+        
+        if (nearestHealthKit) {
+            ai.targetConsumable = nearestHealthKit;
+        } else {
+            ai.targetConsumable = null;
+        }
+    }
+    
+    // Use health kit if needed based on skill level
+    useHealthKitIfNeeded(ai) {
+        if (ai.healthKits <= 0 || ai.isDead) return;
+        
+        const healthPercent = ai.currentHP / ai.maxHP;
+        let shouldUse = false;
+        
+        // Skill-based thresholds
+        switch(ai.aiSkillLevel) {
+            case 'novice':
+                shouldUse = healthPercent < 0.3; // Use when very low (30%)
+                break;
+            case 'intermediate':
+                shouldUse = healthPercent < 0.5; // Use when moderate (50%)
+                break;
+            case 'expert':
+                // Use strategically - during/after combat or when low
+                const inCombat = ai.aiState === 'combat' || ai.aiState === 'flee';
+                shouldUse = healthPercent < 0.6 || (inCombat && healthPercent < 0.8);
+                break;
+            default:
+                shouldUse = healthPercent < 0.3;
+        }
+        
+        if (shouldUse) {
+            const success = ai.useHealthKit();
+            if (success) {
+                console.log(`AI ${ai.name} (${ai.aiSkillLevel}) used health kit, health now: ${ai.currentHP}/${ai.maxHP}`);
+            }
+        }
+    }
+    
+    // Check if AI can pickup a weapon (eligibility check)
+    canPickupWeapon(ai, weaponPickup) {
+        const config = weaponPickup.getWeaponConfig();
+        const inventory = ai.weapons;
+        
+        // Has empty slot - can always pickup
+        if (inventory.length < 3) return true;
+        
+        // Check if this weapon type already owned at higher/same tier
+        const sameTypeWeapon = inventory.find(w => w.weaponType === config.type);
+        if (sameTypeWeapon && sameTypeWeapon.tier >= config.tier) {
+            return false; // Already have this weapon at same/better tier
+        }
+        
+        // Check if this weapon is better than lowest tier weapon
+        const lowestTierWeapon = inventory.reduce((lowest, w) =>
+            w.tier < lowest.tier ? w : lowest
+        );
+        
+        return config.tier > lowestTierWeapon.tier;
     }
     
     // Pick up weapon
@@ -590,26 +740,83 @@ export class AISystem {
             
             if (dropChance < 0.70) {
                 // 70% chance to drop health kit
-                this.spawnConsumable(character.position.clone(), 'healthKit');
+                this.spawnConsumableNearPosition(character.position.clone(), 'healthKit');
             } else if (dropChance < 0.95) {
                 // 25% chance to drop shield potion
-                this.spawnConsumable(character.position.clone(), 'shieldPotion');
+                this.spawnConsumableNearPosition(character.position.clone(), 'shieldPotion');
             }
             // 5% chance to drop nothing (dropChance >= 0.95)
         }
     }
     
-    // Spawn a consumable on the ground
-    spawnConsumable(position, consumableType) {
-        const consumable = new Consumable(createConsumable(consumableType));
-        consumable.setPosition(position.x, position.y);
+    // Spawn a consumable near a position (avoid obstacles)
+    spawnConsumableNearPosition(position, consumableType) {
+        const mapConfig = getCurrentMapConfig();
+        const clearanceRadius = 30;
         
-        // Add to game state consumables array (needs to be passed from main.js)
+        // Try to find valid position near death location
+        let validPos = this.findValidSpawnPosition(position.x, position.y, mapConfig, clearanceRadius);
+        
+        if (!validPos) {
+            // If can't find valid position nearby, skip spawn
+            console.warn(`Could not spawn ${consumableType} near (${Math.round(position.x)}, ${Math.round(position.y)})`);
+            return null;
+        }
+        
+        const consumable = new Consumable(createConsumable(consumableType));
+        consumable.setPosition(validPos.x, validPos.y);
+        
+        // Add to game state consumables array
         if (this.gameState.consumables) {
             this.gameState.consumables.push(consumable);
         }
         
         return consumable;
+    }
+    
+    // Find valid spawn position not on obstacles (similar to main.js version)
+    findValidSpawnPosition(x, y, mapConfig, clearanceRadius = 30, maxAttempts = 5) {
+        const checkPosition = (checkX, checkY) => {
+            for (const obstacle of mapConfig.obstacles) {
+                const obstacleLeft = obstacle.position.x - obstacle.width / 2;
+                const obstacleRight = obstacle.position.x + obstacle.width / 2;
+                const obstacleTop = obstacle.position.y - obstacle.height / 2;
+                const obstacleBottom = obstacle.position.y + obstacle.height / 2;
+                
+                if (checkX + clearanceRadius > obstacleLeft &&
+                    checkX - clearanceRadius < obstacleRight &&
+                    checkY + clearanceRadius > obstacleTop &&
+                    checkY - clearanceRadius < obstacleBottom) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        
+        // Try original position first
+        if (checkPosition(x, y)) {
+            return { x, y };
+        }
+        
+        // Try nearby positions in a spiral pattern
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const radius = attempt * 40;
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+                const testX = x + Math.cos(angle) * radius;
+                const testY = y + Math.sin(angle) * radius;
+                
+                const distFromCenter = Math.sqrt(
+                    Math.pow(testX - mapConfig.centerX, 2) +
+                    Math.pow(testY - mapConfig.centerY, 2)
+                );
+                
+                if (distFromCenter < mapConfig.radius - 100 && checkPosition(testX, testY)) {
+                    return { x: testX, y: testY };
+                }
+            }
+        }
+        
+        return null;
     }
     
     // Get available weapons for rendering

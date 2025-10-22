@@ -263,6 +263,9 @@ class EditorApp {
     }
     
     exportMap() {
+        // Sync game config from form to editor before exporting
+        this.ui.syncGameConfigToEditor();
+        
         const json = this.editor.exportToJSON();
         
         // Create a download link
@@ -299,6 +302,8 @@ class EditorApp {
                     if (success) {
                         // Sync the background dropdown with imported map
                         this.ui.syncBackgroundSelector();
+                        // Sync the game config to the form
+                        this.ui.loadGameConfigIntoForm();
                         alert('Map imported successfully!');
                     } else {
                         alert('Error importing map. Please check the JSON format.');

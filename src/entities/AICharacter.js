@@ -18,6 +18,7 @@ export class AICharacter extends Character {
         this.perceptionRange = this.getPerceptionRange();
         this.targetEnemy = null;
         this.targetWeapon = null;
+        this.targetConsumable = null; // For health kits and other consumables
         this.lastSeenPlayerPosition = null;
         
         // Decision making

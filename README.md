@@ -1,60 +1,51 @@
-# Battle-2D-eath - Phase 10
+# Battle-2D-eath
 
-A 2D Battle Royale game built with vanilla JavaScript and HTML5 Canvas.
+A minimalist 2D battle royale game built with vanilla JavaScript and HTML5 Canvas. Battle against 23 AI opponents with distinct characters, weapons, and abilities in a shrinking safe zone.
 
-## Phase 10: Map Editing and Refinement ✅
+## 🎮 Features
 
-Phase 10 implements a map editor system for creating custom maps and selecting them from the start screen.
+- **2 Playable Characters** - Bolt (fast/agile) and Boulder (tank) with unique abilities
+- **4 Weapon Types** - Blaster, Spear, Bomb, and Gun with 3 tiers each
+- **Shrinking Safe Zone** - Strategic gameplay with increasing danger over time
+- **Health Kits & Tactical Consumables** - Shield potions and special pickups
+- **Intelligent AI** - 23 opponents with varied skill levels and behaviors
+- **Custom Maps** - Built-in map editor for creating and sharing arenas
+- **PNG Asset Support** - Optional visual enhancements with graceful fallbacks
+- **Mobile-First Design** - Touch controls with virtual joystick
 
-### New Features
+## 🚀 Quick Start
 
-- ✅ **Map Editor**: Separate editor interface for creating custom maps
-- ✅ **Map Selection**: Choose from multiple maps on the start screen
-- ✅ **Custom Maps**: Create, save, and load custom map configurations
-- ✅ **Visual Editor**: Click-based placement of bushes, obstacles, and water areas
-- ✅ **Export/Import**: Save maps as JSON files and load them into the game
+### Playing the Game
 
-### Using the Map Editor
-
-1. Open `editor.html` in your browser
-2. Use the tool buttons to select Bush, Rock, Water, or Erase
-3. Click on the map to place objects
-4. Export your map as a JSON file
-5. Add it to the `maps/` directory
-6. Select your custom map from the start screen
-
-For detailed instructions, see [`docs/MAP_EDITOR.md`](docs/MAP_EDITOR.md).
-
-## Phase 1: Core Foundation - Playable Character Movement ✅
-
-Phase 1 implements the fundamental game loop and character movement system.
-
-### Features Implemented
-
-- ✅ **Game Loop**: Fixed timestep at 60 FPS for consistent physics
-- ✅ **Character System**: Player character with stats (using Bolt configuration)
-- ✅ **Movement Physics**: Velocity-based movement with boundary collision
-- ✅ **Virtual Joystick**: Touch-based controls in bottom-left corner
-- ✅ **Input System**: Touch and mouse event handling
-- ✅ **Rendering Pipeline**: Layered rendering (background → entities → UI)
-- ✅ **HUD**: Health bar display
-- ✅ **Mobile-First**: Portrait orientation, 720x1280 canvas (9:16 aspect ratio)
-
-### How to Run
-
-1. Start a local HTTP server:
+1. **Clone the repository:**
    ```bash
-   python3 -m http.server 8080
+   git clone https://github.com/yourusername/Battle-2D-eath.git
+   cd Battle-2D-eath
    ```
 
-2. Open your browser and navigate to:
+2. **Start a local server:**
+   ```bash
+   npm run dev
+   ```
+> make sure you have node/npm installed
+
+3. **Open in browser:**
    ```
    http://localhost:8080
    ```
 
-3. **Controls**:
-   - **Desktop**: Click and drag the joystick in the bottom-left corner
-   - **Mobile**: Touch and drag the joystick to move your character
+4. **Select character and map, then play!**
+
+### Controls
+
+- **Desktop/Mobile**: Virtual joystick (bottom-left) for movement
+- **Combat**: Weapon buttons (bottom-right) - hold to aim, release to fire
+- **Special Ability**: Large center button (bottom-right)
+- **Consumables**: Bottom-center buttons for health kits and pickups
+
+## 🛠️ Development
+
+Built with vanilla JavaScript - no frameworks or build tools required.
 
 ### Project Structure
 
@@ -62,140 +53,145 @@ Phase 1 implements the fundamental game loop and character movement system.
 Battle-2D-eath/
 ├── index.html              # Main game entry point
 ├── editor.html             # Map editor entry point
-├── styles/
-│   └── main.css           # Mobile-first styling
-├── maps/                   # Map JSON files
-│   ├── default.json       # Default arena map
-│   └── island.json        # Island paradise map
 ├── src/
 │   ├── main.js            # Application bootstrap
-│   ├── config/
-│   │   ├── constants.js   # Game constants
-│   │   ├── characters.js  # Character definitions (Bolt & Boulder)
-│   │   ├── weapons.js     # Weapon definitions
-│   │   ├── consumables.js # Consumable definitions
-│   │   └── map.js         # Map configuration & loading
-│   ├── core/
-│   │   ├── GameLoop.js    # Fixed timestep game loop
-│   │   ├── GameState.js   # Centralized state management
-│   │   ├── EventBus.js    # Event system
-│   │   └── AssetLoader.js # Asset loading system
-│   ├── systems/
-│   │   ├── InputSystem.js     # Touch input handling
-│   │   ├── PhysicsSystem.js   # Movement and collision
-│   │   ├── CombatSystem.js    # Weapon and damage system
-│   │   ├── AISystem.js        # AI behavior and decision making
-│   │   ├── SafeZoneSystem.js  # Shrinking safe zone
-│   │   ├── CameraSystem.js    # Camera following
-│   │   └── AbilitySystem.js   # Special abilities
-│   ├── entities/
-│   │   ├── Entity.js      # Base entity class
-│   │   ├── Character.js   # Character entity
-│   │   ├── Player.js      # Player-specific logic
-│   │   ├── AICharacter.js # AI character logic
-│   │   ├── Weapon.js      # Weapon entity
-│   │   └── Consumable.js  # Consumable entity
-│   ├── renderer/
-│   │   ├── Renderer.js            # Main renderer coordinator
-│   │   ├── CharacterRenderer.js   # Character drawing
-│   │   ├── UIRenderer.js          # HUD and UI elements
-│   │   ├── VirtualJoystick.js     # Joystick component
-│   │   ├── StartScreen.js         # Character & map selection
-│   │   ├── MapRenderer.js         # Map terrain rendering
-│   │   ├── MinimapRenderer.js     # Minimap display
-│   │   ├── WeaponButton.js        # Weapon UI button
-│   │   ├── AbilityButton.js       # Ability UI button
-│   │   ├── ConsumableButton.js    # Consumable UI button
-│   │   └── WeaponRenderer.js      # Weapon effects rendering
-│   ├── editor/
-│   │   ├── editorMain.js  # Map editor bootstrap
-│   │   ├── MapEditor.js   # Editor logic
-│   │   └── EditorUI.js    # Editor interface
-│   └── utils/
-│       └── Vector2D.js    # 2D vector math utilities
-└── docs/
-    ├── GDD.md             # Game Design Document
-    ├── ARCHITECTURE.md    # Technical Architecture
-    └── MAP_EDITOR.md      # Map Editor Guide
+│   ├── config/            # Game configuration (characters, weapons, maps)
+│   ├── core/              # Core systems (game loop, state, events)
+│   ├── entities/          # Game entities (characters, weapons, consumables)
+│   ├── systems/           # Game systems (physics, AI, combat, input)
+│   ├── renderer/          # Rendering (canvas drawing, UI components)
+│   ├── editor/            # Map editor code
+│   └── utils/             # Utilities (vector math, etc.)
+├── maps/                   # Map JSON files
+├── assets/                 # Optional PNG assets
+└── docs/                   # Documentation
 ```
 
-### Technical Details
+### Key Technologies
 
-- **Language**: Vanilla JavaScript (ES6+)
-- **Rendering**: HTML5 Canvas 2D API
-- **Module System**: ES6 Modules (import/export)
-- **Target Performance**: 60 FPS
-- **Canvas Size**: 720x1280 (9:16 aspect ratio)
-- **Character**: Bolt (green circle, radius 20px)
-- **Movement Speed**: 250 pixels/second
-- **Boundary Collision**: Character stays within canvas bounds
+- **HTML5 Canvas** - 2D rendering
+- **ES6 Modules** - Code organization
+- **Vanilla JavaScript** - No external dependencies
+- **Fixed Timestep Game Loop** - Consistent 60 FPS physics
 
-### Architecture Highlights
+### Adding Features
 
-1. **Fixed Timestep Game Loop**: Ensures consistent physics regardless of frame rate
-2. **Separation of Concerns**: Clear boundaries between systems
-3. **Event-Driven Communication**: EventBus for loose coupling
-4. **Data-Driven Design**: Character behavior defined by configuration
-5. **Multiplayer-Ready**: Architecture supports future network synchronization
+The codebase uses an ECS-like pattern with clear system boundaries:
 
-### Debug Mode
+- **Entities** ([`src/entities/`](src/entities/)) - Game objects (characters, weapons)
+- **Systems** ([`src/systems/`](src/systems/)) - Game logic (physics, AI, combat)
+- **Renderer** ([`src/renderer/`](src/renderer/)) - Visual presentation
+- **Config** ([`src/config/`](src/config/)) - Data-driven behavior
 
-To enable debug information (FPS, position, velocity), change `DEBUG_MODE` in `src/config/constants.js` to `true`.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for detailed technical overview.
 
-### Completed Phases
+## 📦 Map Editor
 
-- ✅ **Phase 1**: Core Foundation - Character movement
-- ✅ **Phase 2**: Combat Basics - Basic weapon system
-- ✅ **Phase 3**: AI Opponent - Single AI enemy
-- ✅ **Phase 4**: Multiple Weapons - Weapon variety and pickups
-- ✅ **Phase 5**: Map and Environment - Full map with features
-- ✅ **Phase 6**: Safe Zone - Shrinking zone mechanics
-- ✅ **Phase 7**: Polish and Balance - Complete MVP
-- ✅ **Phase 8**: UI Layout Refinement - Improved interface
-- ✅ **Phase 9**: Gameplay Adjustments - AI and ability fixes
-- ✅ **Phase 10**: Map Editor - Custom map creation
+Create custom battle arenas with the built-in map editor:
 
-### Map System
+1. Open [`editor.html`](editor.html) in your browser
+2. Place bushes, obstacles, and water areas
+3. Choose background color or custom image
+4. Export as JSON and save to [`maps/`](maps/) directory
+5. Add to [`maps/manifest.json`](maps/manifest.json) to make it selectable
 
-The game now supports multiple maps:
-- **Random Arena**: Procedurally generated terrain (default)
-- **Default Arena**: Balanced pre-made map
-- **Island Paradise**: Water-heavy tactical map
-- **Custom Maps**: Create your own in the editor!
+See [`docs/MAP_EDITOR.md`](docs/MAP_EDITOR.md) for complete guide.
 
-### Browser Compatibility
+## 🎨 Assets
 
-- Chrome/Edge: ✅
-- Firefox: ✅
-- Safari: ✅
-- Mobile browsers: ✅
+The game supports optional PNG images for enhanced visuals:
 
-### Performance
+- **Characters**: [`assets/characters/`](assets/characters/) - bolt.png, boulder.png
+- **Weapons**: [`assets/weapons/`](assets/weapons/) - blaster.png, spear.png, bomb.png, gun.png
+- **Consumables**: [`assets/consumables/`](assets/consumables/) - health.png, shield.png
 
-- Maintains 60 FPS on mid-range devices
-- Optimized rendering pipeline
-- Efficient collision detection
-- Mobile-first design
+The game works perfectly without any assets using geometric shape fallbacks.
+
+See [`docs/ASSETS_GUIDE.md`](docs/ASSETS_GUIDE.md) for specifications and guidelines.
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how to get started:
+
+### Development Setup
+
+1. Fork and clone the repository
+2. Make your changes
+3. Test locally with a simple HTTP server
+4. Submit a pull request
+
+### Code Style
+
+- Use clear, descriptive variable names
+- Follow existing patterns (ES6 classes, modules)
+- Keep functions focused and under 50 lines
+- Comment complex logic, not obvious code
+- Test on mobile browsers if changing UI/input
+
+### Where to Start
+
+Good first contributions:
+
+- **New Characters**: Add to [`src/config/characters.js`](src/config/characters.js)
+- **New Weapons**: Add to [`src/config/weapons.js`](src/config/weapons.js)
+- **New Maps**: Use the map editor and share via PR
+- **Bug Fixes**: Check issues or test gameplay edge cases
+- **Documentation**: Improve guides or add code comments
+
+### Project Organization
+
+- [`src/config/`](src/config/) - Data-driven configuration
+- [`src/systems/`](src/systems/) - Core game logic
+- [`src/entities/`](src/entities/) - Game object classes
+- [`src/renderer/`](src/renderer/) - Visual presentation
+- [`src/core/`](src/core/) - Game loop, state, events
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for detailed system descriptions.
+
+## 📚 Documentation
+
+- **[Game Design Document](docs/GDD.md)** - Game mechanics and features
+- **[Technical Architecture](docs/ARCHITECTURE.md)** - System design and patterns
+- **[Map Editor Guide](docs/MAP_EDITOR.md)** - Creating custom maps
+- **[Assets Guide](docs/ASSETS_GUIDE.md)** - Adding PNG graphics
+
+## 🌐 Browser Compatibility
+
+- ✅ Chrome/Edge
+- ✅ Firefox
+- ✅ Safari
+- ✅ Mobile browsers (iOS/Android)
+
+## 🎯 Game Mechanics
+
+### Characters
+
+- **Bolt** - Fast, agile character with dash ability
+- **Boulder** - Tank character with ground slam ability
+
+### Weapons
+
+Each weapon has 3 tiers (Common → Rare → Epic) with increasing damage:
+
+- **Blaster** - Cone-shaped close-range attack
+- **Spear** - Long-range projectile
+- **Bomb** - Area-of-effect explosion
+- **Gun** - 3-shot burst fire
+
+### Safe Zone
+
+The safe zone shrinks periodically, dealing increasing damage to players outside. Strategy involves balancing combat with safe zone positioning.
+
+## 📄 License
+
+Free and open - suggestions - no; but PR's are welcome!
+
+## 🙏 Acknowledgments
+
+Built as a learning project exploring vanilla JavaScript game development with HTML5 Canvas.
 
 ---
 
-**Status**: Phase 10 Complete ✅
+**Current Version**: 1.0 (All core features complete)
 
-### Documentation
-
-- Game Design: [`docs/GDD.md`](docs/GDD.md)
-- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Map Editor: [`docs/MAP_EDITOR.md`](docs/MAP_EDITOR.md)
-
-### Quick Start
-
-**Playing the Game:**
-```bash
-python3 -m http.server 8080
-# Open http://localhost:8080
-```
-
-**Using the Map Editor:**
-```bash
-# Same server, then open http://localhost:8080/editor.html
-```
+For detailed gameplay mechanics, see [`docs/GDD.md`](docs/GDD.md)

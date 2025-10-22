@@ -47,12 +47,11 @@ export class StartScreen {
             y: this.canvas.height - 60 * scale,
             width: 200 * scale,
             height: 50 * scale,
-            text: 'START'
+            text: 'BATTLE!'
         };
         
         // Layout positions
         this.titleY = 60 * scale;
-        this.subtitleY = 100 * scale;
         this.cardsY = this.canvas.height * 0.35;
         this.mapSectionY = this.canvas.height * 0.6;
         this.instructionY = this.canvas.height - 25 * scale;
@@ -397,19 +396,28 @@ export class StartScreen {
         // Calculate font sizes
         const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
         const titleSize = Math.max(28, 42 * scale);
-        const subtitleSize = Math.max(16, 20 * scale);
         const instructionSize = Math.max(11, 14 * scale);
         
-        // Title
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${titleSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY);
+        // Title - using logo image instead of text
+        if (this.assetLoader && this.assetLoader.getImage('intro_logo')) {
+            const logoImg = this.assetLoader.getImage('intro_logo');
+            const logoHeight = Math.min(60 * scale, 80); // Adjust height based on screen size
+            const logoWidth = logoHeight * (logoImg.width / logoImg.height); // Maintain aspect ratio
+            ctx.drawImage(
+            logoImg, 
+            (this.canvas.width / 2 - logoWidth / 2 - 60), 
+            this.titleY - logoHeight / 2, 
+            (logoWidth + 120), 
+            (logoHeight + 80)
+            );
+        } else {
+            // Fallback to text if image not loaded
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${titleSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY);
+        }
         
-        // Subtitle
-        ctx.font = `${subtitleSize}px Arial`;
-        ctx.fillStyle = '#aaaaaa';
-        ctx.fillText('Select Your Character', this.canvas.width / 2, this.subtitleY);
         
         // Render character cards
         const characterKeys = Object.keys(CHARACTERS);

@@ -1,6 +1,7 @@
 // Map configuration for Battle-2D-eath Phase 5 & Phase 10
 
 import { Vector2D } from '../utils/Vector2D.js';
+import { getDefaultGameConfig, validateGameConfig } from './gameConfig.js';
 
 // Current selected map
 let currentMapConfig = null;
@@ -116,6 +117,9 @@ export function loadMapFromJSON(mapData) {
         radius: w.radius
     }));
     
+    // Load and validate game config (with fallback to defaults for backward compatibility)
+    const gameConfig = validateGameConfig(mapData.gameConfig);
+    
     currentMapConfig = {
         width: MAP_WIDTH,
         height: MAP_HEIGHT,
@@ -131,21 +135,41 @@ export function loadMapFromJSON(mapData) {
         obstacles: obstacles,
         waterAreas: waterAreas,
         
+        // Game configuration (new in Phase 11+)
+        gameConfig: gameConfig,
+        
+        // Safe zone configuration (kept for backward compatibility, but now derived from gameConfig)
         safeZone: {
             centerX: MAP_CENTER_X,
             centerY: MAP_CENTER_Y,
             initialRadius: mapData.radius || MAP_RADIUS,
-            phases: [
-                { time: 0, radius: mapData.radius || MAP_RADIUS, damage: 0 },
-                { time: 30000, radius: 1000, damage: 2 },
-                { time: 120000, radius: 600, damage: 5 },
-                { time: 210000, radius: 300, damage: 10 },
-                { time: 300000, radius: 150, damage: 20 }
-            ]
+            phases: gameConfig.safeZone.phases.map((phase, index) => ({
+                time: phase.startTime,
+                radius: calculatePhaseRadius(mapData.radius || MAP_RADIUS, index, gameConfig.safeZone.phases.length),
+                damage: phase.damage
+            }))
         }
     };
     
+    console.log('Map loaded with game config:', currentMapConfig.gameConfig);
+    
     return currentMapConfig;
+}
+
+// Calculate radius for each safe zone phase
+function calculatePhaseRadius(mapRadius, phaseIndex, totalPhases) {
+    if (phaseIndex === 0) return mapRadius;
+    
+    // Default shrink pattern: exponentially smaller zones
+    const shrinkRatios = [1.0, 0.71, 0.43, 0.21, 0.11]; // ~71%, 43%, 21%, 11% of map radius
+    
+    if (phaseIndex < shrinkRatios.length) {
+        return Math.round(mapRadius * shrinkRatios[phaseIndex]);
+    }
+    
+    // Fallback for additional phases
+    const ratio = Math.max(0.05, 1 - (phaseIndex / totalPhases));
+    return Math.round(mapRadius * ratio);
 }
 
 // Get current map config (or default)
@@ -153,7 +177,16 @@ export function getCurrentMapConfig() {
     return currentMapConfig || MAP_CONFIG;
 }
 
+// Get game config from current map (with fallback to defaults)
+export function getGameConfig() {
+    const mapConfig = getCurrentMapConfig();
+    return mapConfig.gameConfig || getDefaultGameConfig();
+}
+
 // Map configuration (default/procedural)
+// Initialize with default game config
+const defaultGameConfig = getDefaultGameConfig();
+
 export const MAP_CONFIG = {
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
@@ -170,18 +203,19 @@ export const MAP_CONFIG = {
     obstacles: generateObstacles(20, MAP_CENTER_X, MAP_CENTER_Y, MAP_RADIUS),
     waterAreas: generateWaterAreas(5, MAP_CENTER_X, MAP_CENTER_Y, MAP_RADIUS),
     
-    // Safe zone configuration (for Phase 6)
+    // Game configuration
+    gameConfig: defaultGameConfig,
+    
+    // Safe zone configuration (for backward compatibility, derived from gameConfig)
     safeZone: {
         centerX: MAP_CENTER_X,
         centerY: MAP_CENTER_Y,
         initialRadius: MAP_RADIUS,
-        phases: [
-            { time: 0, radius: MAP_RADIUS, damage: 0 },
-            { time: 30000, radius: 1000, damage: 2 },
-            { time: 120000, radius: 600, damage: 5 },
-            { time: 210000, radius: 300, damage: 10 },
-            { time: 300000, radius: 150, damage: 20 }
-        ]
+        phases: defaultGameConfig.safeZone.phases.map((phase, index) => ({
+            time: phase.startTime,
+            radius: calculatePhaseRadius(MAP_RADIUS, index, defaultGameConfig.safeZone.phases.length),
+            damage: phase.damage
+        }))
     }
 };
 

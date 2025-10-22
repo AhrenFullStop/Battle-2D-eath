@@ -1,6 +1,7 @@
 // Map Editor - Core logic for editing maps
 
 import { Vector2D } from '../utils/Vector2D.js';
+import { getDefaultGameConfig } from '../config/gameConfig.js';
 
 export class MapEditor {
     constructor() {
@@ -10,7 +11,8 @@ export class MapEditor {
             background: { type: 'color', value: '#2d3748' },
             bushes: [],
             obstacles: [],
-            waterAreas: []
+            waterAreas: [],
+            gameConfig: getDefaultGameConfig()
         };
         
         this.currentTool = 'pan'; // 'pan', 'bush', 'obstacle', 'water', 'erase'
@@ -98,10 +100,19 @@ export class MapEditor {
             background: data.background || { type: 'color', value: '#2d3748' },
             bushes: data.bushes || [],
             obstacles: data.obstacles || [],
-            waterAreas: data.waterAreas || []
+            waterAreas: data.waterAreas || [],
+            gameConfig: data.gameConfig || getDefaultGameConfig()
         };
         this.mapRadius = this.mapData.radius;
         this.loadBackgroundImage();
+    }
+    
+    setGameConfig(gameConfig) {
+        this.mapData.gameConfig = gameConfig;
+    }
+    
+    getGameConfig() {
+        return this.mapData.gameConfig || getDefaultGameConfig();
     }
     
     clearMap() {

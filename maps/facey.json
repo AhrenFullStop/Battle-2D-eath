@@ -824,5 +824,45 @@
       "y": 1850,
       "radius": 120
     }
-  ]
+  ],
+  "gameConfig": {
+    "match": {
+      "aiCount": 7,
+      "targetDuration": 600
+    },
+    "safeZone": {
+      "phases": [
+        { "startTime": 0, "damage": 0 },
+        { "startTime": 30000, "damage": 2 },
+        { "startTime": 120000, "damage": 5 },
+        { "startTime": 210000, "damage": 10 },
+        { "startTime": 300000, "damage": 20 }
+      ],
+      "shrinkDuration": 10,
+      "damageTickRate": 0.5
+    },
+    "loot": {
+      "initialWeapons": 8,
+      "initialConsumables": 6,
+      "weaponRespawnTime": 30,
+      "consumableRespawnTime": 20,
+      "weaponTierRatios": {
+        "common": 0.6,
+        "rare": 0.2,
+        "epic": 0.2
+      },
+      "maxWeaponsOnMap": 15
+    },
+    "ai": {
+      "skillDistribution": {
+        "novice": 0.57,
+        "intermediate": 0.29,
+        "expert": 0.14
+      },
+      "characterDistribution": {
+        "bolt": 0.5,
+        "boulder": 0.5
+      }
+    }
+  }
 }

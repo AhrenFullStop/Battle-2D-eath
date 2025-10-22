@@ -1,5 +1,7 @@
 // Editor UI - Handles rendering and UI for the map editor
 
+import { getDefaultGameConfig } from '../config/gameConfig.js';
+
 export class EditorUI {
     constructor(canvas, ctx, editor, camera) {
         this.canvas = canvas;
@@ -54,6 +56,9 @@ export class EditorUI {
         
         // Create background selector dropdown
         this.createBackgroundSelector();
+        
+        // Create game settings panel
+        this.createGameSettingsPanel();
     }
     
     async loadBackgroundImages() {
@@ -144,6 +149,258 @@ export class EditorUI {
         document.body.appendChild(container);
         
         console.log('Background selector created');
+    }
+    
+    createGameSettingsPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'gameSettingsPanel';
+        panel.style.position = 'absolute';
+        panel.style.top = '120px';
+        panel.style.right = '20px';
+        panel.style.width = '320px';
+        panel.style.maxHeight = '600px';
+        panel.style.overflowY = 'auto';
+        panel.style.backgroundColor = 'rgba(31, 41, 55, 0.95)';
+        panel.style.border = '2px solid #6b7280';
+        panel.style.borderRadius = '8px';
+        panel.style.padding = '15px';
+        panel.style.zIndex = '1000';
+        panel.style.fontFamily = 'Arial, sans-serif';
+        panel.style.fontSize = '13px';
+        panel.style.color = '#ffffff';
+        
+        panel.innerHTML = `
+            <h3 style="margin: 0 0 15px 0; color: #60a5fa; font-size: 16px; text-align: center;">Game Settings</h3>
+            
+            <fieldset style="border: 1px solid #4b5563; border-radius: 4px; padding: 10px; margin-bottom: 12px;">
+                <legend style="color: #fbbf24; font-weight: bold;">Match</legend>
+                <label style="display: block; margin-bottom: 8px;">
+                    AI Count:
+                    <input type="number" id="gs_aiCount" min="1" max="50" value="7"
+                           style="width: 60px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px;">
+                    Target Duration (s):
+                    <input type="number" id="gs_targetDuration" min="60" max="1800" value="600"
+                           style="width: 60px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+            </fieldset>
+            
+            <fieldset style="border: 1px solid #4b5563; border-radius: 4px; padding: 10px; margin-bottom: 12px;">
+                <legend style="color: #fbbf24; font-weight: bold;">Safe Zone</legend>
+                <div id="safeZonePhases" style="margin-bottom: 8px;">
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 5px;">Format: Time(ms), Damage</div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                        Phase 1: <input type="number" id="gs_phase0_time" value="0" style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> ms,
+                        <input type="number" id="gs_phase0_damage" value="0" style="width: 40px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> dmg
+                    </label>
+                    <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                        Phase 2: <input type="number" id="gs_phase1_time" value="30000" style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> ms,
+                        <input type="number" id="gs_phase1_damage" value="2" style="width: 40px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> dmg
+                    </label>
+                    <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                        Phase 3: <input type="number" id="gs_phase2_time" value="120000" style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> ms,
+                        <input type="number" id="gs_phase2_damage" value="5" style="width: 40px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> dmg
+                    </label>
+                    <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                        Phase 4: <input type="number" id="gs_phase3_time" value="210000" style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> ms,
+                        <input type="number" id="gs_phase3_damage" value="10" style="width: 40px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> dmg
+                    </label>
+                    <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                        Phase 5: <input type="number" id="gs_phase4_time" value="300000" style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> ms,
+                        <input type="number" id="gs_phase4_damage" value="20" style="width: 40px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;"> dmg
+                    </label>
+                </div>
+                <label style="display: block; margin-bottom: 4px;">
+                    Shrink Duration (s):
+                    <input type="number" id="gs_shrinkDuration" min="1" max="60" value="10"
+                           style="width: 50px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px;">
+                    Damage Tick Rate (s):
+                    <input type="number" id="gs_damageTickRate" min="0.1" max="5" step="0.1" value="0.5"
+                           style="width: 50px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+            </fieldset>
+            
+            <fieldset style="border: 1px solid #4b5563; border-radius: 4px; padding: 10px; margin-bottom: 12px;">
+                <legend style="color: #fbbf24; font-weight: bold;">Loot</legend>
+                <label style="display: block; margin-bottom: 6px;">
+                    Initial Weapons:
+                    <input type="number" id="gs_initialWeapons" min="0" max="100" value="8"
+                           style="width: 50px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 6px;">
+                    Initial Consumables:
+                    <input type="number" id="gs_initialConsumables" min="0" max="100" value="6"
+                           style="width: 50px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 6px;">
+                    Max Weapons on Map:
+                    <input type="number" id="gs_maxWeapons" min="1" max="50" value="15"
+                           style="width: 50px; margin-left: 5px; padding: 4px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <div style="font-size: 11px; color: #9ca3af; margin: 8px 0 4px 0;">Weapon Tier Ratios (must total ~1.0):</div>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Common: <input type="number" id="gs_tierCommon" min="0" max="1" step="0.1" value="0.6"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Rare: <input type="number" id="gs_tierRare" min="0" max="1" step="0.1" value="0.2"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Epic: <input type="number" id="gs_tierEpic" min="0" max="1" step="0.1" value="0.2"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+            </fieldset>
+            
+            <fieldset style="border: 1px solid #4b5563; border-radius: 4px; padding: 10px; margin-bottom: 12px;">
+                <legend style="color: #fbbf24; font-weight: bold;">AI Distribution</legend>
+                <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">Skill levels (must total ~1.0):</div>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Novice: <input type="number" id="gs_skillNovice" min="0" max="1" step="0.1" value="0.57"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Intermediate: <input type="number" id="gs_skillIntermediate" min="0" max="1" step="0.1" value="0.29"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 8px; font-size: 12px;">
+                    Expert: <input type="number" id="gs_skillExpert" min="0" max="1" step="0.1" value="0.14"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">Character types (must total ~1.0):</div>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Bolt: <input type="number" id="gs_charBolt" min="0" max="1" step="0.1" value="0.5"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+                <label style="display: block; margin-bottom: 4px; font-size: 12px;">
+                    Boulder: <input type="number" id="gs_charBoulder" min="0" max="1" step="0.1" value="0.5"
+                           style="width: 50px; padding: 2px; background: #374151; color: #fff; border: 1px solid #6b7280; border-radius: 3px;">
+                </label>
+            </fieldset>
+            
+            <button id="gs_resetDefaults"
+                    style="width: 100%; padding: 10px; background: #ef4444; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+                Reset to Defaults
+            </button>
+        `;
+        
+        document.body.appendChild(panel);
+        
+        // Add event listener for reset button
+        document.getElementById('gs_resetDefaults').addEventListener('click', () => {
+            this.resetGameConfigToDefaults();
+        });
+        
+        // Load current config into form
+        this.loadGameConfigIntoForm();
+        
+        console.log('Game settings panel created');
+    }
+    
+    loadGameConfigIntoForm() {
+        const config = this.editor.getGameConfig();
+        
+        // Match settings
+        document.getElementById('gs_aiCount').value = config.match.aiCount;
+        document.getElementById('gs_targetDuration').value = config.match.targetDuration;
+        
+        // Safe zone settings
+        config.safeZone.phases.forEach((phase, index) => {
+            const timeInput = document.getElementById(`gs_phase${index}_time`);
+            const damageInput = document.getElementById(`gs_phase${index}_damage`);
+            if (timeInput) timeInput.value = phase.startTime;
+            if (damageInput) damageInput.value = phase.damage;
+        });
+        document.getElementById('gs_shrinkDuration').value = config.safeZone.shrinkDuration;
+        document.getElementById('gs_damageTickRate').value = config.safeZone.damageTickRate;
+        
+        // Loot settings
+        document.getElementById('gs_initialWeapons').value = config.loot.initialWeapons;
+        document.getElementById('gs_initialConsumables').value = config.loot.initialConsumables;
+        document.getElementById('gs_maxWeapons').value = config.loot.maxWeaponsOnMap;
+        document.getElementById('gs_tierCommon').value = config.loot.weaponTierRatios.common;
+        document.getElementById('gs_tierRare').value = config.loot.weaponTierRatios.rare;
+        document.getElementById('gs_tierEpic').value = config.loot.weaponTierRatios.epic;
+        
+        // AI settings
+        document.getElementById('gs_skillNovice').value = config.ai.skillDistribution.novice;
+        document.getElementById('gs_skillIntermediate').value = config.ai.skillDistribution.intermediate;
+        document.getElementById('gs_skillExpert').value = config.ai.skillDistribution.expert;
+        document.getElementById('gs_charBolt').value = config.ai.characterDistribution.bolt;
+        document.getElementById('gs_charBoulder').value = config.ai.characterDistribution.boulder;
+    }
+    
+    getGameConfigFromForm() {
+        return {
+            match: {
+                aiCount: parseInt(document.getElementById('gs_aiCount').value),
+                targetDuration: parseInt(document.getElementById('gs_targetDuration').value)
+            },
+            safeZone: {
+                phases: [
+                    {
+                        startTime: parseInt(document.getElementById('gs_phase0_time').value),
+                        damage: parseFloat(document.getElementById('gs_phase0_damage').value)
+                    },
+                    {
+                        startTime: parseInt(document.getElementById('gs_phase1_time').value),
+                        damage: parseFloat(document.getElementById('gs_phase1_damage').value)
+                    },
+                    {
+                        startTime: parseInt(document.getElementById('gs_phase2_time').value),
+                        damage: parseFloat(document.getElementById('gs_phase2_damage').value)
+                    },
+                    {
+                        startTime: parseInt(document.getElementById('gs_phase3_time').value),
+                        damage: parseFloat(document.getElementById('gs_phase3_damage').value)
+                    },
+                    {
+                        startTime: parseInt(document.getElementById('gs_phase4_time').value),
+                        damage: parseFloat(document.getElementById('gs_phase4_damage').value)
+                    }
+                ],
+                shrinkDuration: parseFloat(document.getElementById('gs_shrinkDuration').value),
+                damageTickRate: parseFloat(document.getElementById('gs_damageTickRate').value)
+            },
+            loot: {
+                initialWeapons: parseInt(document.getElementById('gs_initialWeapons').value),
+                initialConsumables: parseInt(document.getElementById('gs_initialConsumables').value),
+                weaponRespawnTime: 30,
+                consumableRespawnTime: 20,
+                weaponTierRatios: {
+                    common: parseFloat(document.getElementById('gs_tierCommon').value),
+                    rare: parseFloat(document.getElementById('gs_tierRare').value),
+                    epic: parseFloat(document.getElementById('gs_tierEpic').value)
+                },
+                maxWeaponsOnMap: parseInt(document.getElementById('gs_maxWeapons').value)
+            },
+            ai: {
+                skillDistribution: {
+                    novice: parseFloat(document.getElementById('gs_skillNovice').value),
+                    intermediate: parseFloat(document.getElementById('gs_skillIntermediate').value),
+                    expert: parseFloat(document.getElementById('gs_skillExpert').value)
+                },
+                characterDistribution: {
+                    bolt: parseFloat(document.getElementById('gs_charBolt').value),
+                    boulder: parseFloat(document.getElementById('gs_charBoulder').value)
+                }
+            }
+        };
+    }
+    
+    resetGameConfigToDefaults() {
+        const defaults = getDefaultGameConfig();
+        this.editor.setGameConfig(defaults);
+        this.loadGameConfigIntoForm();
+        console.log('Game config reset to defaults');
+    }
+    
+    syncGameConfigToEditor() {
+        const config = this.getGameConfigFromForm();
+        this.editor.setGameConfig(config);
     }
     
     updateBackgroundDropdown() {

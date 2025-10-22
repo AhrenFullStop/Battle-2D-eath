@@ -59,11 +59,14 @@ export class AssetLoader {
         }
     }
 
-    // Load all game PNG assets (characters, weapons, consumables)
+    // Load all game PNG assets (characters, weapons, consumables, UI)
     async loadGameAssets() {
         this.isLoading = true;
         
         const assetList = [
+            // UI/Utility assets
+            { key: 'intro_logo', path: 'assets/utils/intro_logo.png', category: 'ui', type: 'logo' },
+            
             // Character assets
             { key: 'char_bolt', path: 'assets/characters/bolt.png', category: 'character', type: 'bolt' },
             { key: 'char_boulder', path: 'assets/characters/boulder.png', category: 'character', type: 'boulder' },

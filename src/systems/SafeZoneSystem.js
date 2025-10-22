@@ -1,16 +1,20 @@
 // Safe Zone System for managing shrinking zone mechanics and damage
 
-import { MAP_CONFIG } from '../config/map.js';
+import { getCurrentMapConfig, getGameConfig } from '../config/map.js';
 
 export class SafeZoneSystem {
     constructor(gameState, eventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
         
+        // Get current map and game configuration
+        const mapConfig = getCurrentMapConfig();
+        const gameConfig = getGameConfig();
+        
         // Safe zone configuration from map
-        this.phases = MAP_CONFIG.safeZone.phases;
-        this.centerX = MAP_CONFIG.safeZone.centerX;
-        this.centerY = MAP_CONFIG.safeZone.centerY;
+        this.phases = mapConfig.safeZone.phases;
+        this.centerX = mapConfig.safeZone.centerX;
+        this.centerY = mapConfig.safeZone.centerY;
         
         // Current state
         this.currentPhaseIndex = 0;
@@ -18,21 +22,23 @@ export class SafeZoneSystem {
         this.currentDamage = this.phases[0].damage;
         this.targetRadius = this.currentRadius;
         
-        // Shrinking animation
+        // Shrinking animation (from game config)
         this.isShrinking = false;
-        this.shrinkDuration = 10; // 10 seconds to shrink to new size (in seconds, not ms)
+        this.shrinkDuration = gameConfig.safeZone.shrinkDuration; // Seconds to shrink to new size
         this.shrinkProgress = 0;
         this.shrinkStartRadius = this.currentRadius;
         
-        // Damage tick timer
+        // Damage tick timer (from game config)
         this.damageTickTimer = 0;
-        this.damageTickInterval = 0.5; // Damage every 0.5 seconds
+        this.damageTickInterval = gameConfig.safeZone.damageTickRate; // Damage interval in seconds
         
         // Track characters outside zone
         this.charactersOutsideZone = new Set();
         
-        console.log('SafeZoneSystem initialized');
+        console.log('SafeZoneSystem initialized with game config');
         console.log(`Initial phase: ${this.currentPhaseIndex}, radius: ${this.currentRadius}`);
+        console.log(`Shrink duration: ${this.shrinkDuration}s, Damage tick rate: ${this.damageTickInterval}s`);
+        console.log(`Safe zone phases:`, this.phases);
     }
     
     // Update safe zone system
