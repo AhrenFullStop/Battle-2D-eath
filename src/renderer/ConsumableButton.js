@@ -1,11 +1,12 @@
 // Button for using health kits
 
 export class ConsumableButton {
-    constructor(x, y, radius, slotIndex) {
+    constructor(x, y, radius, slotIndex, assetLoader = null) {
         this.x = x;
         this.y = y;
         this.radius = radius;
         this.slotIndex = slotIndex;
+        this.assetLoader = assetLoader;
         
         // Button state
         this.active = false;
@@ -66,16 +67,21 @@ export class ConsumableButton {
         ctx.lineWidth = this.pressed ? 4 : 3;
         ctx.stroke();
         
-        // Draw health kit icon (cross symbol)
+        // Draw health kit icon - try PNG first, fallback to cross symbol
         if (hasHealthKit) {
-            ctx.fillStyle = '#ffffff';
-            ctx.lineWidth = 4;
-            const crossSize = this.radius * 0.5;
+            const rendered = this.drawHealthKitImage(ctx);
             
-            // Vertical line
-            ctx.fillRect(this.x - 2, this.y - crossSize, 4, crossSize * 2);
-            // Horizontal line
-            ctx.fillRect(this.x - crossSize, this.y - 2, crossSize * 2, 4);
+            if (!rendered) {
+                // Fallback to cross symbol
+                ctx.fillStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                const crossSize = this.radius * 0.5;
+                
+                // Vertical line
+                ctx.fillRect(this.x - 2, this.y - crossSize, 4, crossSize * 2);
+                // Horizontal line
+                ctx.fillRect(this.x - crossSize, this.y - 2, crossSize * 2, 4);
+            }
         }
         
         // Draw health kit count label (e.g., "1/2")
@@ -86,5 +92,25 @@ export class ConsumableButton {
         ctx.fillText(`${healthKitCount}/${maxHealthKits}`, this.x, this.y + this.radius + 20);
         
         ctx.restore();
+    }
+    
+    // Draw health kit PNG image
+    drawHealthKitImage(ctx) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getConsumableImage('healthKit');
+        if (!img) {
+            return false;
+        }
+
+        const size = this.radius * 1.3;
+        
+        // Draw health kit image
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, this.x - size / 2, this.y - size / 2, size, size);
+        
+        return true;
     }
 }

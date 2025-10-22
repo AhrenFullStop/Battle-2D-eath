@@ -1,32 +1,8 @@
 {
   "maps": [
     {
-      "file": "default.json",
-      "name": "Default Arena",
-      "radius": 1400,
-      "bushCount": 0,
-      "obstacleCount": 0,
-      "waterCount": 0,
-      "background": {
-        "type": "color",
-        "value": "#2d3748"
-      }
-    },
-    {
-      "file": "island.json",
-      "name": "Island Paradise",
-      "radius": 1400,
-      "bushCount": 12,
-      "obstacleCount": 8,
-      "waterCount": 3,
-      "background": {
-        "type": "color",
-        "value": "#1e3a5f"
-      }
-    },
-    {
-      "file": "testmap.json",
-      "name": "Test Map",
+      "file": "Island.json",
+      "name": "Island Map",
       "radius": 1400,
       "bushCount": 10,
       "obstacleCount": 5,

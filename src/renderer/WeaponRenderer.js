@@ -1,8 +1,9 @@
 // Weapon renderer for drawing weapon effects, projectiles, and damage numbers
 
 export class WeaponRenderer {
-    constructor(ctx) {
+    constructor(ctx, assetLoader = null) {
         this.ctx = ctx;
+        this.assetLoader = assetLoader;
     }
     
     // Render all combat visuals
@@ -189,7 +190,7 @@ export class WeaponRenderer {
         
         ctx.save();
         
-        // Draw tier glow (outer ring)
+        // Draw tier glow (outer ring) - always visible
         ctx.globalAlpha = pickup.glowIntensity * 0.3;
         ctx.fillStyle = pickup.tierColor;
         ctx.beginPath();
@@ -203,29 +204,14 @@ export class WeaponRenderer {
         ctx.arc(x, y, pickup.radius + 4, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw weapon base
+        // Try to render as PNG, otherwise use circle
         ctx.globalAlpha = 1.0;
-        ctx.fillStyle = pickup.color;
-        ctx.beginPath();
-        ctx.arc(x, y, pickup.radius, 0, Math.PI * 2);
-        ctx.fill();
+        const rendered = this.renderWeaponPickupImage(pickup, x, y);
         
-        // Draw tier border
-        ctx.strokeStyle = pickup.tierColor;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        
-        // Draw weapon icon (first letter of weapon name)
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(pickup.weaponConfig.name.charAt(0), x, y);
-        
-        // Draw tier indicator (small number)
-        ctx.font = 'bold 10px Arial';
-        ctx.fillStyle = pickup.tierColor;
-        ctx.fillText(pickup.weaponConfig.tier.toString(), x, y + 12);
+        if (!rendered) {
+            // Fallback to circle rendering
+            this.renderWeaponPickupCircle(pickup, x, y);
+        }
         
         // Draw pickup progress if being picked up
         if (pickup.isBeingPickedUp) {
@@ -248,5 +234,63 @@ export class WeaponRenderer {
         }
         
         ctx.restore();
+    }
+
+    // Render weapon pickup as PNG image
+    renderWeaponPickupImage(pickup, x, y) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getWeaponImage(pickup.weaponConfig.type);
+        if (!img) {
+            return false;
+        }
+
+        const ctx = this.ctx;
+        const size = pickup.radius * 2;
+        
+        // Draw weapon image
+        ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+        
+        // Draw tier indicator (small number) below image
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = pickup.tierColor;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(pickup.weaponConfig.tier.toString(), x, y + size / 2 + 2);
+        ctx.fillText(pickup.weaponConfig.tier.toString(), x, y + size / 2 + 2);
+        
+        return true;
+    }
+
+    // Render weapon pickup as circle (fallback)
+    renderWeaponPickupCircle(pickup, x, y) {
+        const ctx = this.ctx;
+        
+        // Draw weapon base
+        ctx.fillStyle = pickup.color;
+        ctx.beginPath();
+        ctx.arc(x, y, pickup.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw tier border
+        ctx.strokeStyle = pickup.tierColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Draw weapon icon (first letter of weapon name)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pickup.weaponConfig.name.charAt(0), x, y);
+        
+        // Draw tier indicator (small number)
+        ctx.font = 'bold 10px Arial';
+        ctx.fillStyle = pickup.tierColor;
+        ctx.fillText(pickup.weaponConfig.tier.toString(), x, y + 12);
     }
 }

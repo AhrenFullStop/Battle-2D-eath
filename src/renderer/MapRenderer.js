@@ -3,8 +3,9 @@
 import { getCurrentMapConfig } from '../config/map.js';
 
 export class MapRenderer {
-    constructor(ctx) {
+    constructor(ctx, assetLoader = null) {
         this.ctx = ctx;
+        this.assetLoader = assetLoader;
         this.backgroundImage = null;
         this.backgroundImageLoaded = false;
         this.lastBackgroundPath = null;
@@ -281,7 +282,7 @@ export class MapRenderer {
             if (this.isVisible(worldX, worldY, consumable.radius * 3, consumable.radius * 3, camera)) {
                 this.ctx.save();
                 
-                // Draw consumable with glow effect
+                // Draw glow effect (always visible)
                 const glowSize = consumable.radius * 1.5;
                 const gradient = this.ctx.createRadialGradient(
                     worldX, worldY, 0,
@@ -296,16 +297,13 @@ export class MapRenderer {
                 this.ctx.arc(worldX, worldY, glowSize, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Draw consumable body
-                this.ctx.fillStyle = consumable.color;
-                this.ctx.beginPath();
-                this.ctx.arc(worldX, worldY, consumable.radius, 0, Math.PI * 2);
-                this.ctx.fill();
+                // Try to render as PNG, otherwise use circle
+                const rendered = this.drawConsumableImage(consumable, worldX, worldY);
                 
-                // Draw outline
-                this.ctx.strokeStyle = '#ffffff';
-                this.ctx.lineWidth = 2;
-                this.ctx.stroke();
+                if (!rendered) {
+                    // Fallback to circle rendering
+                    this.drawConsumableCircle(consumable, worldX, worldY);
+                }
                 
                 // Draw pickup progress if being picked up
                 if (consumable.isBeingPickedUp) {
@@ -326,6 +324,39 @@ export class MapRenderer {
                 this.ctx.restore();
             }
         });
+    }
+
+    // Draw consumable as PNG image
+    drawConsumableImage(consumable, worldX, worldY) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getConsumableImage(consumable.consumableType);
+        if (!img) {
+            return false;
+        }
+
+        const size = consumable.radius * 2;
+        
+        // Draw consumable image
+        this.ctx.drawImage(img, worldX - size / 2, worldY - size / 2, size, size);
+        
+        return true;
+    }
+
+    // Draw consumable as circle (fallback)
+    drawConsumableCircle(consumable, worldX, worldY) {
+        // Draw consumable body
+        this.ctx.fillStyle = consumable.color;
+        this.ctx.beginPath();
+        this.ctx.arc(worldX, worldY, consumable.radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw outline
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
     }
 
     drawMapBoundary(camera) {

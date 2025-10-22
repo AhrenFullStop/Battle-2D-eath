@@ -3,12 +3,13 @@
 import { Vector2D } from '../utils/Vector2D.js';
 
 export class WeaponButton {
-    constructor(x, y, radius, weaponIndex) {
+    constructor(x, y, radius, weaponIndex, assetLoader = null) {
         // Button position (fixed in bottom-right area)
         this.x = x;
         this.y = y;
         this.radius = radius;
         this.weaponIndex = weaponIndex;
+        this.assetLoader = assetLoader;
         
         // Button state
         this.active = false;
@@ -177,13 +178,18 @@ export class WeaponButton {
         ctx.lineWidth = this.pressed ? 4 : 3;
         ctx.stroke();
         
-        // Draw weapon icon (simple text for now)
+        // Draw weapon icon - try PNG first, fallback to text
         if (weapon) {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(weapon.name.charAt(0), this.x, this.y);
+            const rendered = this.drawWeaponImage(ctx, weapon);
+            
+            if (!rendered) {
+                // Fallback to first letter
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(weapon.name.charAt(0), this.x, this.y);
+            }
         }
         
         // Draw aim preview line when aiming
@@ -257,5 +263,35 @@ export class WeaponButton {
         }
         
         ctx.restore();
+    }
+    
+    // Draw weapon PNG image with tier number
+    drawWeaponImage(ctx, weapon) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getWeaponImage(weapon.weaponType);
+        if (!img) {
+            return false;
+        }
+
+        const size = this.radius * 1.3;
+        
+        // Draw weapon image
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, this.x - size / 2, this.y - size / 2, size, size);
+        
+        // Draw tier indicator below the weapon
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = weapon.tierColor || '#ffffff';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(weapon.tier.toString(), this.x, this.y + size / 2 - 8);
+        ctx.fillText(weapon.tier.toString(), this.x, this.y + size / 2 - 8);
+        
+        return true;
     }
 }

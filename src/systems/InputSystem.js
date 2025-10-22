@@ -8,9 +8,10 @@ import { Vector2D } from '../utils/Vector2D.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants.js';
 
 export class InputSystem {
-    constructor(canvas, eventBus) {
+    constructor(canvas, eventBus, assetLoader = null) {
         this.canvas = canvas;
         this.eventBus = eventBus;
+        this.assetLoader = assetLoader;
         
         // Virtual joystick for movement
         this.joystick = new VirtualJoystick();
@@ -37,7 +38,8 @@ export class InputSystem {
                 weaponPositions[i].x,
                 weaponPositions[i].y,
                 weaponRadius,
-                i
+                i,
+                assetLoader
             );
             this.weaponButtons.push(button);
         }
@@ -53,7 +55,8 @@ export class InputSystem {
             healthKitX,
             healthKitY,
             healthKitRadius,
-            0 // Single slot index
+            0, // Single slot index
+            assetLoader
         );
         this.healthKitButtons.push(button);
         

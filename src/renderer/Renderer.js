@@ -7,14 +7,15 @@ import { MapRenderer } from './MapRenderer.js';
 import { MinimapRenderer } from './MinimapRenderer.js';
 
 export class Renderer {
-    constructor(canvas) {
+    constructor(canvas, assetLoader = null) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        this.assetLoader = assetLoader;
         
-        // Sub-renderers
-        this.mapRenderer = new MapRenderer(this.ctx);
-        this.characterRenderer = new CharacterRenderer(this.ctx);
-        this.weaponRenderer = new WeaponRenderer(this.ctx);
+        // Sub-renderers with assetLoader support
+        this.mapRenderer = new MapRenderer(this.ctx, assetLoader);
+        this.characterRenderer = new CharacterRenderer(this.ctx, assetLoader);
+        this.weaponRenderer = new WeaponRenderer(this.ctx, assetLoader);
         this.uiRenderer = new UIRenderer(this.ctx, canvas);
         this.minimapRenderer = new MinimapRenderer(this.ctx);
     }

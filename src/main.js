@@ -44,13 +44,15 @@ class Game {
         this.selectedCharacter = null;
         this.selectedMap = null;
         
-        // Start screen
-        this.startScreen = new StartScreen(this.canvas, this.ctx);
+        // Initialize AssetLoader early for start screen
+        this.assetLoader = new AssetLoader();
+        
+        // Start screen with asset loader
+        this.startScreen = new StartScreen(this.canvas, this.ctx, this.assetLoader);
         
         // Initialize core systems (will be set up after character selection)
         this.gameState = null;
         this.eventBus = null;
-        this.assetLoader = null;
         
         // Game systems (initialized after character selection)
         this.inputSystem = null;
@@ -108,20 +110,26 @@ class Game {
         // Initialize core systems
         this.gameState = new GameState();
         this.eventBus = new EventBus();
-        this.assetLoader = new AssetLoader();
+        
+        // AssetLoader already created in constructor, just ensure assets are loaded
+        if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
+            console.log('Loading game assets...');
+            await this.assetLoader.loadGameAssets();
+            console.log('Game assets loaded');
+        }
         
         // Store consumables array in game state for AI drops
         this.gameState.consumables = this.consumables;
         
         // Initialize game systems
-        this.inputSystem = new InputSystem(this.canvas, this.eventBus);
+        this.inputSystem = new InputSystem(this.canvas, this.eventBus, this.assetLoader);
         this.physicsSystem = new PhysicsSystem(this.gameState);
         this.combatSystem = new CombatSystem(this.gameState, this.eventBus);
         this.safeZoneSystem = new SafeZoneSystem(this.gameState, this.eventBus);
         this.aiSystem = new AISystem(this.gameState, this.eventBus, this.combatSystem);
         this.abilitySystem = new AbilitySystem(this.gameState, this.eventBus, this.combatSystem);
         this.cameraSystem = new CameraSystem(CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.renderer = new Renderer(this.canvas);
+        this.renderer = new Renderer(this.canvas, this.assetLoader);
         
         // Store safe zone system reference in game state
         this.gameState.safeZoneSystem = this.safeZoneSystem;
@@ -496,11 +504,16 @@ class Game {
 // Initialize and start the game when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        console.log('=== Battle-2D-eath Phase 7: Polish ===');
-        console.log('Loading start screen...');
+        console.log('=== Battle-2D-eath Phase 11: Visuals and Characters (PNG Assets) ===');
+        console.log('Loading assets and start screen...');
         
         // Create game instance
         const game = new Game();
+        
+        // Load game assets for start screen
+        console.log('Loading game assets...');
+        await game.assetLoader.loadGameAssets();
+        console.log('Game assets loaded for start screen');
         
         // Start render loop for start screen
         const startScreenLoop = new GameLoop(

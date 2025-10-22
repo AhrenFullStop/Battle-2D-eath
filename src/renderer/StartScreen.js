@@ -3,9 +3,10 @@
 import { CHARACTERS } from '../config/characters.js';
 
 export class StartScreen {
-    constructor(canvas, ctx) {
+    constructor(canvas, ctx, assetLoader = null) {
         this.canvas = canvas;
         this.ctx = ctx;
+        this.assetLoader = assetLoader;
         this.selectedCharacter = 'bolt'; // Default selection
         this.selectedMap = null;
         
@@ -467,14 +468,19 @@ export class StartScreen {
         ctx.textAlign = 'center';
         ctx.fillText(character.name, cardX, cardY - this.cardHeight / 2 + 45 * scale);
         
-        // Character visual (colored circle)
-        ctx.fillStyle = character.color;
-        ctx.beginPath();
-        ctx.arc(cardX, cardY - 25 * scale, circleRadius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
+        // Character visual - try PNG first, fallback to circle
+        const rendered = this.drawCharacterPreviewImage(characterKey, cardX, cardY - 25 * scale, circleRadius);
+        
+        if (!rendered) {
+            // Fallback to colored circle
+            ctx.fillStyle = character.color;
+            ctx.beginPath();
+            ctx.arc(cardX, cardY - 25 * scale, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        }
         
         // Character stats
         ctx.font = `${statsSize}px Arial`;
@@ -793,6 +799,26 @@ export class StartScreen {
         ctx.lineTo(x, y + radius);
         ctx.quadraticCurveTo(x, y, x + radius, y);
         ctx.closePath();
+    }
+    
+    // Draw character preview image (for start screen)
+    drawCharacterPreviewImage(characterKey, x, y, radius) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getCharacterImage(characterKey);
+        if (!img) {
+            return false;
+        }
+
+        const ctx = this.ctx;
+        const size = radius * 2;
+        
+        // Draw character image
+        ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+        
+        return true;
     }
     
     getSelectedCharacter() {

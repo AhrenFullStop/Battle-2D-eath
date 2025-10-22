@@ -1,8 +1,9 @@
 // Character renderer for drawing characters on canvas
 
 export class CharacterRenderer {
-    constructor(ctx) {
+    constructor(ctx, assetLoader = null) {
         this.ctx = ctx;
+        this.assetLoader = assetLoader;
     }
 
     // Render all characters
@@ -20,6 +21,59 @@ export class CharacterRenderer {
         const pos = character.position;
         
         ctx.save();
+        
+        // Try to render as PNG image first
+        const rendered = this.drawCharacterImage(character);
+        
+        // Fallback to circle if PNG not available
+        if (!rendered) {
+            this.drawCharacterCircle(character);
+        }
+        
+        // Draw health bar above character
+        this.drawHealthBar(character);
+        
+        // Draw AI state label for debugging (if AI character)
+        if (!character.isPlayer && character.aiState !== undefined) {
+            this.drawAIStateLabel(character);
+        }
+        
+        ctx.restore();
+    }
+
+    // Draw character as PNG image with rotation
+    drawCharacterImage(character) {
+        if (!this.assetLoader) {
+            return false;
+        }
+
+        const img = this.assetLoader.getCharacterImage(character.characterType);
+        if (!img) {
+            return false;
+        }
+
+        const ctx = this.ctx;
+        const pos = character.position;
+        const size = character.radius * 2; // Image size matches hitbox diameter
+        
+        ctx.save();
+        
+        // Move to character position and rotate
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate(character.facingAngle);
+        
+        // Draw image centered at origin
+        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+        
+        ctx.restore();
+        
+        return true;
+    }
+
+    // Draw character as circle (fallback)
+    drawCharacterCircle(character) {
+        const ctx = this.ctx;
+        const pos = character.position;
         
         // Draw character as a circle
         ctx.fillStyle = character.color;
@@ -46,16 +100,6 @@ export class CharacterRenderer {
             ctx.lineTo(endX, endY);
             ctx.stroke();
         }
-        
-        // Draw health bar above character
-        this.drawHealthBar(character);
-        
-        // Draw AI state label for debugging (if AI character)
-        if (!character.isPlayer && character.aiState !== undefined) {
-            this.drawAIStateLabel(character);
-        }
-        
-        ctx.restore();
     }
     
     // Draw AI state label for debugging

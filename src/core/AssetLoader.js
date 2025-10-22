@@ -6,10 +6,15 @@ export class AssetLoader {
         this.loadedCount = 0;
         this.totalCount = 0;
         this.isLoading = false;
+        
+        // Asset categories
+        this.characterImages = new Map();
+        this.weaponImages = new Map();
+        this.consumableImages = new Map();
     }
 
-    // Load an image asset
-    loadImage(key, path) {
+    // Load an image asset with optional fallback handling
+    loadImage(key, path, silent = false) {
         return new Promise((resolve, reject) => {
             const img = new Image();
             
@@ -20,7 +25,13 @@ export class AssetLoader {
             };
             
             img.onerror = () => {
-                reject(new Error(`Failed to load image: ${path}`));
+                if (silent) {
+                    // Silent failure - asset is optional
+                    this.loadedCount++;
+                    resolve(null);
+                } else {
+                    reject(new Error(`Failed to load image: ${path}`));
+                }
             };
             
             img.src = path;
@@ -33,7 +44,7 @@ export class AssetLoader {
         this.totalCount = imageList.length;
         this.loadedCount = 0;
 
-        const promises = imageList.map(({ key, path }) => 
+        const promises = imageList.map(({ key, path }) =>
             this.loadImage(key, path)
         );
 
@@ -43,6 +54,66 @@ export class AssetLoader {
             return true;
         } catch (error) {
             console.error('Error loading assets:', error);
+            this.isLoading = false;
+            return false;
+        }
+    }
+
+    // Load all game PNG assets (characters, weapons, consumables)
+    async loadGameAssets() {
+        this.isLoading = true;
+        
+        const assetList = [
+            // Character assets
+            { key: 'char_bolt', path: 'assets/characters/bolt.png', category: 'character', type: 'bolt' },
+            { key: 'char_boulder', path: 'assets/characters/boulder.png', category: 'character', type: 'boulder' },
+            
+            // Weapon assets
+            { key: 'weapon_blaster', path: 'assets/weapons/blaster.png', category: 'weapon', type: 'blaster' },
+            { key: 'weapon_spear', path: 'assets/weapons/spear.png', category: 'weapon', type: 'spear' },
+            { key: 'weapon_bomb', path: 'assets/weapons/bomb.png', category: 'weapon', type: 'bomb' },
+            { key: 'weapon_gun', path: 'assets/weapons/gun.png', category: 'weapon', type: 'gun' },
+            
+            // Consumable assets
+            { key: 'consumable_healthKit', path: 'assets/consumables/health.png', category: 'consumable', type: 'healthKit' },
+            { key: 'consumable_shieldPotion', path: 'assets/consumables/shield.png', category: 'consumable', type: 'shieldPotion' }
+        ];
+
+        this.totalCount = assetList.length;
+        this.loadedCount = 0;
+
+        // Load all assets with silent failures (optional assets)
+        const promises = assetList.map(async ({ key, path, category, type }) => {
+            const img = await this.loadImage(key, path, true);
+            
+            if (img) {
+                // Store in category-specific maps for easy retrieval
+                if (category === 'character') {
+                    this.characterImages.set(type, img);
+                } else if (category === 'weapon') {
+                    this.weaponImages.set(type, img);
+                } else if (category === 'consumable') {
+                    this.consumableImages.set(type, img);
+                }
+            }
+            
+            return img;
+        });
+
+        try {
+            const results = await Promise.all(promises);
+            const successCount = results.filter(img => img !== null).length;
+            
+            if (successCount > 0) {
+                console.log(`Loaded ${successCount} of ${assetList.length} game assets`);
+            } else {
+                console.log('No PNG assets found - using fallback geometric rendering');
+            }
+            
+            this.isLoading = false;
+            return true;
+        } catch (error) {
+            console.error('Error loading game assets:', error);
             this.isLoading = false;
             return false;
         }
@@ -58,6 +129,42 @@ export class AssetLoader {
         return this.images.has(key);
     }
 
+    // Get character image by type (bolt, boulder)
+    getCharacterImage(characterType) {
+        const img = this.characterImages.get(characterType);
+        return (img && img.complete) ? img : null;
+    }
+
+    // Check if character image is loaded
+    hasCharacterImage(characterType) {
+        const img = this.characterImages.get(characterType);
+        return img && img.complete;
+    }
+
+    // Get weapon image by type (blaster, spear, bomb, gun)
+    getWeaponImage(weaponType) {
+        const img = this.weaponImages.get(weaponType);
+        return (img && img.complete) ? img : null;
+    }
+
+    // Check if weapon image is loaded
+    hasWeaponImage(weaponType) {
+        const img = this.weaponImages.get(weaponType);
+        return img && img.complete;
+    }
+
+    // Get consumable image by type (healthKit, shieldPotion)
+    getConsumableImage(consumableType) {
+        const img = this.consumableImages.get(consumableType);
+        return (img && img.complete) ? img : null;
+    }
+
+    // Check if consumable image is loaded
+    hasConsumableImage(consumableType) {
+        const img = this.consumableImages.get(consumableType);
+        return img && img.complete;
+    }
+
     // Get loading progress (0 to 1)
     getProgress() {
         if (this.totalCount === 0) return 1;
@@ -67,6 +174,9 @@ export class AssetLoader {
     // Clear all loaded assets
     clear() {
         this.images.clear();
+        this.characterImages.clear();
+        this.weaponImages.clear();
+        this.consumableImages.clear();
         this.loadedCount = 0;
         this.totalCount = 0;
     }
