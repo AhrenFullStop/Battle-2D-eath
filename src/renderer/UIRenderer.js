@@ -193,13 +193,13 @@ export class UIRenderer {
         ctx.textBaseline = 'top';
         ctx.fillText(`${Math.ceil(player.currentHP)}/${player.maxHP}`, healthBarX + healthBarWidth / 2, barY + barHeight + 8);
         
-        // Shield text (if has shield, underneath shield bar)
+        // Shield text (if has shield, underneath shield bar - 4 units lower to avoid collision)
         if (player.shield > 0) {
             const shieldX = healthBarX - shieldBarWidth - 5;
             ctx.fillStyle = '#00aaff';
             ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(`${Math.ceil(player.shield)}`, shieldX + shieldBarWidth / 2, barY + barHeight + 8);
+            ctx.fillText(`${Math.ceil(player.shield)}`, shieldX + shieldBarWidth / 2, barY + barHeight + 12);
         }
         
         ctx.restore();

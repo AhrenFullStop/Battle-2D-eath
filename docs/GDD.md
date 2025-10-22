@@ -681,9 +681,10 @@ Purpose: Tap to heal
 **Goal:** add visual feel to the game
 
 **Tasks:**
-1. We should be able to add in PNGs for playable and non playable characters as well as weapons or pickups
-2. Guide the user what images are needed and where to place them
-3. Ensure proper rendering and gameplay after additions
+1. We should be able to add in PNGs for playable and non playable characters as well as weapons, pickups, potentially rocks, trees or oceans as well.
+2. Guide the user what images are needed and where to place them for easy replacement
+3. Rotation of player images is important.
+4. Ensure proper rendering, performance and gameplay after modifications
 
 **Deliverable:** Game handles PNGs in place of certain entities
 

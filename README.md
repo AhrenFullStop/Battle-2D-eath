@@ -1,6 +1,29 @@
-# Battle-2D-eath - Phase 1
+# Battle-2D-eath - Phase 10
 
 A 2D Battle Royale game built with vanilla JavaScript and HTML5 Canvas.
+
+## Phase 10: Map Editing and Refinement ✅
+
+Phase 10 implements a map editor system for creating custom maps and selecting them from the start screen.
+
+### New Features
+
+- ✅ **Map Editor**: Separate editor interface for creating custom maps
+- ✅ **Map Selection**: Choose from multiple maps on the start screen
+- ✅ **Custom Maps**: Create, save, and load custom map configurations
+- ✅ **Visual Editor**: Click-based placement of bushes, obstacles, and water areas
+- ✅ **Export/Import**: Save maps as JSON files and load them into the game
+
+### Using the Map Editor
+
+1. Open `editor.html` in your browser
+2. Use the tool buttons to select Bush, Rock, Water, or Erase
+3. Click on the map to place objects
+4. Export your map as a JSON file
+5. Add it to the `maps/` directory
+6. Select your custom map from the start screen
+
+For detailed instructions, see [`docs/MAP_EDITOR.md`](docs/MAP_EDITOR.md).
 
 ## Phase 1: Core Foundation - Playable Character Movement ✅
 
@@ -37,36 +60,63 @@ Phase 1 implements the fundamental game loop and character movement system.
 
 ```
 Battle-2D-eath/
-├── index.html              # Entry point
+├── index.html              # Main game entry point
+├── editor.html             # Map editor entry point
 ├── styles/
 │   └── main.css           # Mobile-first styling
+├── maps/                   # Map JSON files
+│   ├── default.json       # Default arena map
+│   └── island.json        # Island paradise map
 ├── src/
 │   ├── main.js            # Application bootstrap
 │   ├── config/
 │   │   ├── constants.js   # Game constants
-│   │   └── characters.js  # Character definitions (Bolt & Boulder)
+│   │   ├── characters.js  # Character definitions (Bolt & Boulder)
+│   │   ├── weapons.js     # Weapon definitions
+│   │   ├── consumables.js # Consumable definitions
+│   │   └── map.js         # Map configuration & loading
 │   ├── core/
 │   │   ├── GameLoop.js    # Fixed timestep game loop
 │   │   ├── GameState.js   # Centralized state management
 │   │   ├── EventBus.js    # Event system
 │   │   └── AssetLoader.js # Asset loading system
 │   ├── systems/
-│   │   ├── InputSystem.js # Touch input handling
-│   │   └── PhysicsSystem.js # Movement and collision
+│   │   ├── InputSystem.js     # Touch input handling
+│   │   ├── PhysicsSystem.js   # Movement and collision
+│   │   ├── CombatSystem.js    # Weapon and damage system
+│   │   ├── AISystem.js        # AI behavior and decision making
+│   │   ├── SafeZoneSystem.js  # Shrinking safe zone
+│   │   ├── CameraSystem.js    # Camera following
+│   │   └── AbilitySystem.js   # Special abilities
 │   ├── entities/
 │   │   ├── Entity.js      # Base entity class
 │   │   ├── Character.js   # Character entity
-│   │   └── Player.js      # Player-specific logic
+│   │   ├── Player.js      # Player-specific logic
+│   │   ├── AICharacter.js # AI character logic
+│   │   ├── Weapon.js      # Weapon entity
+│   │   └── Consumable.js  # Consumable entity
 │   ├── renderer/
-│   │   ├── Renderer.js    # Main renderer coordinator
-│   │   ├── CharacterRenderer.js # Character drawing
-│   │   ├── UIRenderer.js  # HUD and UI elements
-│   │   └── VirtualJoystick.js # Joystick component
+│   │   ├── Renderer.js            # Main renderer coordinator
+│   │   ├── CharacterRenderer.js   # Character drawing
+│   │   ├── UIRenderer.js          # HUD and UI elements
+│   │   ├── VirtualJoystick.js     # Joystick component
+│   │   ├── StartScreen.js         # Character & map selection
+│   │   ├── MapRenderer.js         # Map terrain rendering
+│   │   ├── MinimapRenderer.js     # Minimap display
+│   │   ├── WeaponButton.js        # Weapon UI button
+│   │   ├── AbilityButton.js       # Ability UI button
+│   │   ├── ConsumableButton.js    # Consumable UI button
+│   │   └── WeaponRenderer.js      # Weapon effects rendering
+│   ├── editor/
+│   │   ├── editorMain.js  # Map editor bootstrap
+│   │   ├── MapEditor.js   # Editor logic
+│   │   └── EditorUI.js    # Editor interface
 │   └── utils/
 │       └── Vector2D.js    # 2D vector math utilities
 └── docs/
     ├── GDD.md             # Game Design Document
-    └── ARCHITECTURE.md    # Technical Architecture
+    ├── ARCHITECTURE.md    # Technical Architecture
+    └── MAP_EDITOR.md      # Map Editor Guide
 ```
 
 ### Technical Details
@@ -92,13 +142,26 @@ Battle-2D-eath/
 
 To enable debug information (FPS, position, velocity), change `DEBUG_MODE` in `src/config/constants.js` to `true`.
 
-### Next Steps (Future Phases)
+### Completed Phases
 
-- **Phase 2**: Weapons and combat system
-- **Phase 3**: AI opponents
-- **Phase 4**: Items and pickups
-- **Phase 5**: Safe zone mechanics
-- **Phase 6**: Polish and optimization
+- ✅ **Phase 1**: Core Foundation - Character movement
+- ✅ **Phase 2**: Combat Basics - Basic weapon system
+- ✅ **Phase 3**: AI Opponent - Single AI enemy
+- ✅ **Phase 4**: Multiple Weapons - Weapon variety and pickups
+- ✅ **Phase 5**: Map and Environment - Full map with features
+- ✅ **Phase 6**: Safe Zone - Shrinking zone mechanics
+- ✅ **Phase 7**: Polish and Balance - Complete MVP
+- ✅ **Phase 8**: UI Layout Refinement - Improved interface
+- ✅ **Phase 9**: Gameplay Adjustments - AI and ability fixes
+- ✅ **Phase 10**: Map Editor - Custom map creation
+
+### Map System
+
+The game now supports multiple maps:
+- **Random Arena**: Procedurally generated terrain (default)
+- **Default Arena**: Balanced pre-made map
+- **Island Paradise**: Water-heavy tactical map
+- **Custom Maps**: Create your own in the editor!
 
 ### Browser Compatibility
 
@@ -116,7 +179,23 @@ To enable debug information (FPS, position, velocity), change `DEBUG_MODE` in `s
 
 ---
 
-**Status**: Phase 1 Complete ✅
+**Status**: Phase 10 Complete ✅
 
-For detailed architecture information, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-For game design details, see [`docs/GDD.md`](docs/GDD.md).
+### Documentation
+
+- Game Design: [`docs/GDD.md`](docs/GDD.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Map Editor: [`docs/MAP_EDITOR.md`](docs/MAP_EDITOR.md)
+
+### Quick Start
+
+**Playing the Game:**
+```bash
+python3 -m http.server 8080
+# Open http://localhost:8080
+```
+
+**Using the Map Editor:**
+```bash
+# Same server, then open http://localhost:8080/editor.html
+```

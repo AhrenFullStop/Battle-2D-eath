@@ -69,6 +69,7 @@ export class InputSystem {
         
         // Ability activation state
         this.abilityActivated = false;
+        this.abilityCharging = false;
         
         // Health kit usage state
         this.healthKitUsed = false;
@@ -162,8 +163,11 @@ export class InputSystem {
                 } else if (touchData.type === 'weapon') {
                     this.weaponButtons[touchData.index].onTouchMove(touch.identifier, coords.x, coords.y);
                     touchData.coords = coords;
+                } else if (touchData.type === 'ability') {
+                    // Track ability button hold for preview
+                    touchData.coords = coords;
                 }
-                // Ability and health kit buttons don't need move updates
+                // Health kit buttons don't need move updates
             }
         }
     }
@@ -193,6 +197,7 @@ export class InputSystem {
                     if (shouldActivate) {
                         this.abilityActivated = true;
                     }
+                    this.abilityCharging = false;
                 } else if (touchData.type === 'healthKit') {
                     const button = this.healthKitButtons[0]; // Only one button now
                     const shouldUse = button.onTouchEnd(touch.identifier);
@@ -247,13 +252,16 @@ export class InputSystem {
                 }
             }
             
-            // Update ability button cooldown
+            // Update ability button cooldown and charging state
             if (player.specialAbilityCooldown > 0 && player.specialAbility) {
                 const progress = player.specialAbilityCooldown / player.specialAbility.cooldown;
                 this.abilityButton.setCooldownProgress(progress);
             } else {
                 this.abilityButton.setCooldownProgress(0);
             }
+            
+            // Update ability charging state (for Ground Slam preview)
+            this.abilityCharging = this.abilityButton.pressed && this.abilityButton.isReady();
         }
     }
 
@@ -282,6 +290,11 @@ export class InputSystem {
             return true;
         }
         return false;
+    }
+    
+    // Check if ability is currently being charged (for preview)
+    isAbilityCharging() {
+        return this.abilityCharging;
     }
     
     // Check if health kit was used and consume the event

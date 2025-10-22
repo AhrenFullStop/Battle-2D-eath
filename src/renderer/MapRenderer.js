@@ -1,13 +1,53 @@
 // Map renderer for Battle-2D-eath Phase 5
 
-import { MAP_CONFIG } from '../config/map.js';
+import { getCurrentMapConfig } from '../config/map.js';
 
 export class MapRenderer {
     constructor(ctx) {
         this.ctx = ctx;
+        this.backgroundImage = null;
+        this.backgroundImageLoaded = false;
+        this.lastBackgroundPath = null;
+    }
+    
+    // Load background image if needed
+    ensureBackgroundImage() {
+        const mapConfig = getCurrentMapConfig();
+        
+        // Check if map has background image
+        if (mapConfig.background && mapConfig.background.type === 'image') {
+            const imagePath = `maps/backgrounds/${mapConfig.background.value}`;
+            
+            // Only load if it's a different image
+            if (this.lastBackgroundPath !== imagePath) {
+                this.lastBackgroundPath = imagePath;
+                this.backgroundImageLoaded = false;
+                this.backgroundImage = new Image();
+                this.backgroundImage.onload = () => {
+                    this.backgroundImageLoaded = true;
+                    console.log('Background image loaded:', imagePath);
+                };
+                this.backgroundImage.onerror = () => {
+                    console.error('Failed to load background image:', imagePath);
+                    this.backgroundImageLoaded = false;
+                    this.backgroundImage = null;
+                };
+                this.backgroundImage.src = imagePath;
+            }
+        } else {
+            // Reset if not using image background
+            if (this.lastBackgroundPath !== null) {
+                this.lastBackgroundPath = null;
+                this.backgroundImage = null;
+                this.backgroundImageLoaded = false;
+            }
+        }
     }
 
     render(camera, gameState, consumables) {
+        // Ensure background image is loaded if needed
+        this.ensureBackgroundImage();
+        
         // Draw map background
         this.drawBackground(camera);
         
@@ -33,14 +73,74 @@ export class MapRenderer {
     }
 
     drawBackground(camera) {
-        this.ctx.fillStyle = '#2d5016'; // Dark green grass
-        // Draw background in world space (canvas is already transformed)
-        this.ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+        const mapConfig = getCurrentMapConfig();
+        
+        // Check if we have a background configuration
+        if (mapConfig.background) {
+            if (mapConfig.background.type === 'image' && this.backgroundImageLoaded && this.backgroundImage) {
+                // Draw background image scaled to map size
+                const mapRadius = mapConfig.radius;
+                const mapCenterX = mapConfig.centerX;
+                const mapCenterY = mapConfig.centerY;
+                
+                // Draw image to cover the entire map circle
+                this.ctx.save();
+                
+                // Create circular clipping path for the map
+                this.ctx.beginPath();
+                this.ctx.arc(mapCenterX, mapCenterY, mapRadius, 0, Math.PI * 2);
+                this.ctx.clip();
+                
+                // Draw the background image scaled to fit the map
+                const size = mapRadius * 2;
+                this.ctx.drawImage(
+                    this.backgroundImage,
+                    mapCenterX - mapRadius,
+                    mapCenterY - mapRadius,
+                    size,
+                    size
+                );
+                
+                this.ctx.restore();
+                
+                // Fill outside the map circle with a darker version of the background color
+                this.ctx.fillStyle = mapConfig.background.value || '#1a1a2e';
+                this.ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+                
+                // Redraw the map circle on top to cover the outside
+                this.ctx.save();
+                this.ctx.beginPath();
+                this.ctx.arc(mapCenterX, mapCenterY, mapRadius, 0, Math.PI * 2);
+                this.ctx.clip();
+                this.ctx.drawImage(
+                    this.backgroundImage,
+                    mapCenterX - mapRadius,
+                    mapCenterY - mapRadius,
+                    size,
+                    size
+                );
+                this.ctx.restore();
+            } else if (mapConfig.background.type === 'color') {
+                // Draw solid color background
+                this.ctx.fillStyle = mapConfig.background.value;
+                this.ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+            } else {
+                // Fallback to default green
+                this.ctx.fillStyle = '#2d5016';
+                this.ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+            }
+        } else {
+            // Default background (dark green grass)
+            this.ctx.fillStyle = '#2d5016';
+            this.ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+        }
     }
 
     drawSafeZone(camera, gameState) {
+        const mapConfig = getCurrentMapConfig();
+        
         // Get current safe zone info from SafeZoneSystem (Phase 6)
-        let currentRadius = MAP_CONFIG.safeZone.initialRadius;
+        let currentRadius = mapConfig.safeZone.initialRadius;
         let isShrinking = false;
         
         if (gameState.safeZoneSystem) {
@@ -50,8 +150,8 @@ export class MapRenderer {
         }
         
         // Use world coordinates directly (canvas is already in world space)
-        const worldX = MAP_CONFIG.safeZone.centerX;
-        const worldY = MAP_CONFIG.safeZone.centerY;
+        const worldX = mapConfig.safeZone.centerX;
+        const worldY = mapConfig.safeZone.centerY;
         
         // Draw safe zone circle (green outline, pulsing when shrinking)
         let alpha = 0.3;
@@ -71,31 +171,46 @@ export class MapRenderer {
     }
 
     drawWaterAreas(camera) {
+        const mapConfig = getCurrentMapConfig();
+        
         this.ctx.fillStyle = '#1e3a8a'; // Dark blue water
         
-        MAP_CONFIG.waterAreas.forEach((water, idx) => {
+        mapConfig.waterAreas.forEach((water, idx) => {
             // Use world coordinates directly (canvas is already in world space)
             const worldX = water.position.x;
             const worldY = water.position.y;
             
-            // Only draw if visible (with larger margin)
-            if (this.isVisible(worldX, worldY, water.width, water.height, camera)) {
-                this.ctx.fillRect(
-                    worldX - water.width / 2,
-                    worldY - water.height / 2,
-                    water.width,
-                    water.height
-                );
+            // Check if water has radius (circle) or width/height (rectangle)
+            if (water.radius !== undefined) {
+                // Circle-based water area
+                const size = water.radius * 2;
+                if (this.isVisible(worldX, worldY, size, size, camera)) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(worldX, worldY, water.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+            } else {
+                // Rectangle-based water area
+                if (this.isVisible(worldX, worldY, water.width, water.height, camera)) {
+                    this.ctx.fillRect(
+                        worldX - water.width / 2,
+                        worldY - water.height / 2,
+                        water.width,
+                        water.height
+                    );
+                }
             }
         });
     }
 
     drawObstacles(camera) {
+        const mapConfig = getCurrentMapConfig();
+        
         this.ctx.fillStyle = '#6b7280'; // Gray rocks
         this.ctx.strokeStyle = '#4b5563'; // Darker gray outline
         this.ctx.lineWidth = 2;
         
-        MAP_CONFIG.obstacles.forEach((obstacle, idx) => {
+        mapConfig.obstacles.forEach((obstacle, idx) => {
             // Use world coordinates directly (canvas is already in world space)
             const worldX = obstacle.position.x;
             const worldY = obstacle.position.y;
@@ -119,7 +234,9 @@ export class MapRenderer {
     }
 
     drawBushes(camera) {
-        MAP_CONFIG.bushes.forEach((bush, idx) => {
+        const mapConfig = getCurrentMapConfig();
+        
+        mapConfig.bushes.forEach((bush, idx) => {
             // Use world coordinates directly (canvas is already in world space)
             const worldX = bush.position.x;
             const worldY = bush.position.y;
@@ -212,9 +329,11 @@ export class MapRenderer {
     }
 
     drawMapBoundary(camera) {
+        const mapConfig = getCurrentMapConfig();
+        
         // Use world coordinates directly (canvas is already in world space)
-        const worldX = MAP_CONFIG.centerX;
-        const worldY = MAP_CONFIG.centerY;
+        const worldX = mapConfig.centerX;
+        const worldY = mapConfig.centerY;
         
         // Check if boundary is visible (distance from camera center to map center)
         const cameraCenterX = camera.x + camera.width / 2;
@@ -224,12 +343,12 @@ export class MapRenderer {
             Math.pow(worldY - cameraCenterY, 2)
         );
         
-        if (distFromCenter < MAP_CONFIG.radius + 500) {
+        if (distFromCenter < mapConfig.radius + 500) {
             // Draw boundary circle (solid line for performance)
             this.ctx.strokeStyle = 'rgba(220, 38, 38, 0.6)'; // Semi-transparent red
             this.ctx.lineWidth = 8;
             this.ctx.beginPath();
-            this.ctx.arc(worldX, worldY, MAP_CONFIG.radius, 0, Math.PI * 2);
+            this.ctx.arc(worldX, worldY, mapConfig.radius, 0, Math.PI * 2);
             this.ctx.stroke();
         }
     }

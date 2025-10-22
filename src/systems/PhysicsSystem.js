@@ -2,7 +2,7 @@
 
 import { Vector2D } from '../utils/Vector2D.js';
 import { FRICTION } from '../config/constants.js';
-import { MAP_CONFIG, clampToMapBounds } from '../config/map.js';
+import { getCurrentMapConfig, clampToMapBounds } from '../config/map.js';
 
 export class PhysicsSystem {
     constructor(gameState) {
@@ -81,23 +81,25 @@ export class PhysicsSystem {
 
     // Keep character within circular map boundaries
     constrainToMapBounds(character) {
-        const dx = character.position.x - MAP_CONFIG.centerX;
-        const dy = character.position.y - MAP_CONFIG.centerY;
+        const mapConfig = getCurrentMapConfig();
+        const dx = character.position.x - mapConfig.centerX;
+        const dy = character.position.y - mapConfig.centerY;
         const distanceSquared = dx * dx + dy * dy;
-        const maxDistance = MAP_CONFIG.radius - character.hitboxRadius;
+        const maxDistance = mapConfig.radius - character.hitboxRadius;
         
         if (distanceSquared > maxDistance * maxDistance) {
             const distance = Math.sqrt(distanceSquared);
             const scale = maxDistance / distance;
-            character.position.x = MAP_CONFIG.centerX + dx * scale;
-            character.position.y = MAP_CONFIG.centerY + dy * scale;
+            character.position.x = mapConfig.centerX + dx * scale;
+            character.position.y = mapConfig.centerY + dy * scale;
             character.velocity.set(0, 0);
         }
     }
 
     // Check if character is colliding with any obstacle
     checkObstacleCollision(character) {
-        for (const obstacle of MAP_CONFIG.obstacles) {
+        const mapConfig = getCurrentMapConfig();
+        for (const obstacle of mapConfig.obstacles) {
             if (this.circleRectCollision(
                 character.position.x,
                 character.position.y,
@@ -126,15 +128,28 @@ export class PhysicsSystem {
 
     // Check if character is in water
     isInWater(character) {
-        for (const water of MAP_CONFIG.waterAreas) {
-            const rectX = water.position.x - water.width / 2;
-            const rectY = water.position.y - water.height / 2;
-            
-            if (character.position.x >= rectX &&
-                character.position.x <= rectX + water.width &&
-                character.position.y >= rectY &&
-                character.position.y <= rectY + water.height) {
-                return true;
+        const mapConfig = getCurrentMapConfig();
+        for (const water of mapConfig.waterAreas) {
+            // Check if water has radius (circle) or width/height (rectangle)
+            if (water.radius !== undefined) {
+                // Circle-based water area
+                const dx = character.position.x - water.position.x;
+                const dy = character.position.y - water.position.y;
+                const distanceSquared = dx * dx + dy * dy;
+                if (distanceSquared <= water.radius * water.radius) {
+                    return true;
+                }
+            } else {
+                // Rectangle-based water area
+                const rectX = water.position.x - water.width / 2;
+                const rectY = water.position.y - water.height / 2;
+                
+                if (character.position.x >= rectX &&
+                    character.position.x <= rectX + water.width &&
+                    character.position.y >= rectY &&
+                    character.position.y <= rectY + water.height) {
+                    return true;
+                }
             }
         }
         return false;
@@ -142,7 +157,8 @@ export class PhysicsSystem {
 
     // Check if character is in a bush
     isInBush(character) {
-        for (const bush of MAP_CONFIG.bushes) {
+        const mapConfig = getCurrentMapConfig();
+        for (const bush of mapConfig.bushes) {
             const dx = character.position.x - bush.position.x;
             const dy = character.position.y - bush.position.y;
             const distanceSquared = dx * dx + dy * dy;

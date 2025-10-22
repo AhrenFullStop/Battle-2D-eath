@@ -20,7 +20,7 @@ export class Renderer {
     }
 
     // Main render method called each frame
-    render(gameState, inputSystem, gameLoop, interpolation, combatSystem, aiSystem, consumables) {
+    render(gameState, inputSystem, gameLoop, interpolation, combatSystem, aiSystem, consumables, abilitySystem) {
         // CRITICAL: Clear the entire canvas before rendering
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -47,10 +47,30 @@ export class Renderer {
             this.weaponRenderer.render(combatSystem, pickups);
         }
         
-        // Layer 3: Characters
+        // Layer 3: Ground slam preview (if active)
+        if (abilitySystem) {
+            const preview = abilitySystem.getGroundSlamPreview();
+            if (preview) {
+                this.ctx.save();
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.fillStyle = '#ff4444';
+                this.ctx.beginPath();
+                this.ctx.arc(preview.position.x, preview.position.y, preview.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Draw border
+                this.ctx.globalAlpha = 0.6;
+                this.ctx.strokeStyle = '#ff0000';
+                this.ctx.lineWidth = 3;
+                this.ctx.stroke();
+                this.ctx.restore();
+            }
+        }
+        
+        // Layer 4: Characters
         this.characterRenderer.render(gameState.characters);
         
-        // Layer 4: Weapon effects and projectiles (already rendered with pickups above)
+        // Layer 5: Weapon effects and projectiles (already rendered with pickups above)
         
         // Restore context (back to screen space for UI)
         this.ctx.restore();

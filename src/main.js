@@ -21,7 +21,7 @@ import { CHARACTERS } from './config/characters.js';
 import { createWeapon } from './config/weapons.js';
 import { createConsumable } from './config/consumables.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config/constants.js';
-import { MAP_CONFIG } from './config/map.js';
+import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig } from './config/map.js';
 import { Vector2D } from './utils/Vector2D.js';
 
 class Game {
@@ -42,6 +42,7 @@ class Game {
         // Game phase
         this.phase = 'start'; // 'start', 'playing', 'ended'
         this.selectedCharacter = null;
+        this.selectedMap = null;
         
         // Start screen
         this.startScreen = new StartScreen(this.canvas, this.ctx);
@@ -78,6 +79,28 @@ class Game {
     
     async startGame() {
         console.log('Starting game with character:', this.selectedCharacter);
+        console.log('Starting game with map:', this.selectedMap?.name || 'Random Arena');
+        
+        // Load selected map if it's a custom map
+        if (this.selectedMap && this.selectedMap.file) {
+            try {
+                const mapPath = `maps/${this.selectedMap.file}`;
+                console.log('Fetching map file:', mapPath);
+                const response = await fetch(mapPath);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const mapData = await response.json();
+                console.log('Map data loaded:', mapData);
+                loadMapFromJSON(mapData);
+                console.log('✅ Successfully loaded custom map:', mapData.name);
+            } catch (error) {
+                console.error('❌ Error loading map file:', error);
+                console.log('Falling back to default procedural map');
+            }
+        } else {
+            console.log('Using default procedural map (no custom map selected)');
+        }
         
         // Remove start screen event listeners
         this.startScreen.removeEventListeners();
@@ -86,6 +109,9 @@ class Game {
         this.gameState = new GameState();
         this.eventBus = new EventBus();
         this.assetLoader = new AssetLoader();
+        
+        // Store consumables array in game state for AI drops
+        this.gameState.consumables = this.consumables;
         
         // Initialize game systems
         this.inputSystem = new InputSystem(this.canvas, this.eventBus);
@@ -131,14 +157,17 @@ class Game {
 
     // Initialize the game
     async init() {
-        console.log('Initializing Battle-2D-eath Phase 7: Polish...');
+        console.log('Initializing Battle-2D-eath Phase 10: Map Editor...');
+        
+        // Get the current map config (either loaded or default)
+        const mapConfig = getCurrentMapConfig();
         
         // Create player character with selected character type
         const characterConfig = { ...CHARACTERS[this.selectedCharacter], isPlayer: true };
         const player = new Player(characterConfig);
         
         // Spawn player in center of map
-        player.setPosition(MAP_CONFIG.centerX, MAP_CONFIG.centerY);
+        player.setPosition(mapConfig.centerX, mapConfig.centerY);
         
         // Equip player with a Blaster weapon (Tier 1)
         const blasterWeapon = new Weapon(createWeapon('blaster', 1));
@@ -164,7 +193,7 @@ class Game {
             const aiOpponent = new AICharacter(aiConfig);
             
             // Spawn AI at spawn points around the map edge
-            const spawnPoint = MAP_CONFIG.characterSpawns[i % MAP_CONFIG.characterSpawns.length];
+            const spawnPoint = mapConfig.characterSpawns[i % mapConfig.characterSpawns.length];
             aiOpponent.setPosition(spawnPoint.x, spawnPoint.y);
             
             // Add AI to game state
@@ -180,8 +209,8 @@ class Game {
         for (let i = 0; i < 8; i++) {
             const angle = (i / 8) * Math.PI * 2;
             const distance = 400 + Math.random() * 500;
-            const x = MAP_CONFIG.centerX + Math.cos(angle) * distance;
-            const y = MAP_CONFIG.centerY + Math.sin(angle) * distance;
+            const x = mapConfig.centerX + Math.cos(angle) * distance;
+            const y = mapConfig.centerY + Math.sin(angle) * distance;
             const type = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
             const tier = Math.random() < 0.6 ? 1 : (Math.random() < 0.8 ? 2 : 3);
             
@@ -194,8 +223,8 @@ class Game {
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2 + Math.PI / 12;
             const distance = 300 + Math.random() * 600;
-            const x = MAP_CONFIG.centerX + Math.cos(angle) * distance;
-            const y = MAP_CONFIG.centerY + Math.sin(angle) * distance;
+            const x = mapConfig.centerX + Math.cos(angle) * distance;
+            const y = mapConfig.centerY + Math.sin(angle) * distance;
             const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
             
             const consumable = new Consumable(createConsumable(type));
@@ -208,8 +237,9 @@ class Game {
         console.log(`${aiCount} AI opponents spawned with mixed characters and skill levels`);
         console.log(`${weaponSpawns.length} weapons spawned across the map`);
         console.log(`${this.consumables.length} consumables spawned (health kits and shield potions)`);
-        console.log(`Map size: ${MAP_CONFIG.width}x${MAP_CONFIG.height}, radius: ${MAP_CONFIG.radius}`);
-        console.log(`Terrain: ${MAP_CONFIG.bushes.length} bushes, ${MAP_CONFIG.obstacles.length} obstacles, ${MAP_CONFIG.waterAreas.length} water areas`);
+        console.log(`Map: ${mapConfig.name || 'Random Arena'}`);
+        console.log(`Map size: ${mapConfig.width}x${mapConfig.height}, radius: ${mapConfig.radius}`);
+        console.log(`Terrain: ${mapConfig.bushes.length} bushes, ${mapConfig.obstacles.length} obstacles, ${mapConfig.waterAreas.length} water areas`);
         // Initialize camera to player position (no lag on start)
         this.cameraSystem.x = player.position.x - CANVAS_WIDTH / 2;
         this.cameraSystem.y = player.position.y - CANVAS_HEIGHT / 2;
@@ -277,6 +307,10 @@ class Game {
                     });
                 }
             }
+            
+            // Update ability preview (for Ground Slam)
+            const isChargingAbility = this.inputSystem.isAbilityCharging();
+            this.abilitySystem.updateGroundSlamPreview(this.gameState.player, isChargingAbility);
             
             // Check if ability was activated (Phase 7)
             if (this.inputSystem.checkAbilityActivated()) {
@@ -425,6 +459,7 @@ class Game {
             if (this.startScreen.checkStartRequested()) {
                 console.log('Start button pressed, starting game...');
                 this.selectedCharacter = this.startScreen.getSelectedCharacter();
+                this.selectedMap = this.startScreen.getSelectedMap();
                 // Stop the start screen loop
                 if (this.startScreenLoop) {
                     this.startScreenLoop.stop();
@@ -444,7 +479,8 @@ class Game {
                 interpolation,
                 this.combatSystem,
                 this.aiSystem,
-                this.consumables
+                this.consumables,
+                this.abilitySystem
             );
         }
     }

@@ -1,6 +1,9 @@
-// Map configuration for Battle-2D-eath Phase 5
+// Map configuration for Battle-2D-eath Phase 5 & Phase 10
 
 import { Vector2D } from '../utils/Vector2D.js';
+
+// Current selected map
+let currentMapConfig = null;
 
 // Map dimensions
 export const MAP_WIDTH = 3000;
@@ -95,13 +98,69 @@ function generateWaterAreas(count, centerX, centerY, radius) {
     return waterAreas;
 }
 
-// Map configuration
+// Load map from JSON data
+export function loadMapFromJSON(mapData) {
+    const bushes = mapData.bushes.map(b => ({
+        position: new Vector2D(b.x, b.y),
+        radius: b.radius
+    }));
+    
+    const obstacles = mapData.obstacles.map(o => ({
+        position: new Vector2D(o.x, o.y),
+        width: o.width,
+        height: o.height
+    }));
+    
+    const waterAreas = mapData.waterAreas.map(w => ({
+        position: new Vector2D(w.x, w.y),
+        radius: w.radius
+    }));
+    
+    currentMapConfig = {
+        width: MAP_WIDTH,
+        height: MAP_HEIGHT,
+        centerX: MAP_CENTER_X,
+        centerY: MAP_CENTER_Y,
+        radius: mapData.radius || MAP_RADIUS,
+        name: mapData.name || "Custom Map",
+        background: mapData.background || { type: 'color', value: '#2d5016' },
+        
+        characterSpawns: generateSpawnPoints(24, mapData.radius || MAP_RADIUS, MAP_CENTER_X, MAP_CENTER_Y),
+        
+        bushes: bushes,
+        obstacles: obstacles,
+        waterAreas: waterAreas,
+        
+        safeZone: {
+            centerX: MAP_CENTER_X,
+            centerY: MAP_CENTER_Y,
+            initialRadius: mapData.radius || MAP_RADIUS,
+            phases: [
+                { time: 0, radius: mapData.radius || MAP_RADIUS, damage: 0 },
+                { time: 30000, radius: 1000, damage: 2 },
+                { time: 120000, radius: 600, damage: 5 },
+                { time: 210000, radius: 300, damage: 10 },
+                { time: 300000, radius: 150, damage: 20 }
+            ]
+        }
+    };
+    
+    return currentMapConfig;
+}
+
+// Get current map config (or default)
+export function getCurrentMapConfig() {
+    return currentMapConfig || MAP_CONFIG;
+}
+
+// Map configuration (default/procedural)
 export const MAP_CONFIG = {
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
     centerX: MAP_CENTER_X,
     centerY: MAP_CENTER_Y,
     radius: MAP_RADIUS,
+    background: { type: 'color', value: '#2d5016' }, // Default green grass
     
     // Character spawn points (24 total for full game, using subset for Phase 5)
     characterSpawns: generateSpawnPoints(24, MAP_RADIUS, MAP_CENTER_X, MAP_CENTER_Y),

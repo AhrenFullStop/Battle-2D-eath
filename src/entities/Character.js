@@ -49,9 +49,12 @@ export class Character extends Entity {
     update(deltaTime) {
         if (this.isDead) return;
         
-        // Update cooldowns
+        // Update cooldowns (convert deltaTime from seconds to milliseconds)
         if (this.specialAbilityCooldown > 0) {
-            this.specialAbilityCooldown -= deltaTime;
+            this.specialAbilityCooldown -= deltaTime * 1000;
+            if (this.specialAbilityCooldown < 0) {
+                this.specialAbilityCooldown = 0;
+            }
         }
         
         // Update facing angle based on velocity

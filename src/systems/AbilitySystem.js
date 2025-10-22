@@ -10,6 +10,9 @@ export class AbilitySystem {
         
         // Active ability effects
         this.activeEffects = [];
+        
+        // Ground slam preview state
+        this.groundSlamPreview = null;
     }
     
     // Activate character's special ability
@@ -45,38 +48,29 @@ export class AbilitySystem {
     
     // Execute dash ability (Bolt)
     executeDash(character, ability) {
-        // Dash forward in facing direction
-        const dashDistance = ability.dashDistance || 150;
-        const dashDirection = new Vector2D(
-            Math.cos(character.facingAngle),
-            Math.sin(character.facingAngle)
-        );
+        // Apply speed boost for 3 seconds instead of teleporting
+        const speedMultiplier = 2; // 2x speed boost
+        const duration = 2000; // 2 seconds
         
-        // Calculate target position
-        const targetX = character.position.x + dashDirection.x * dashDistance;
-        const targetY = character.position.y + dashDirection.y * dashDistance;
-        
-        // Keep within map bounds
-        const mapRadius = 1500;
-        const distance = Math.sqrt(targetX * targetX + targetY * targetY);
-        
-        if (distance > mapRadius) {
-            // Adjust to map edge
-            const scale = mapRadius / distance;
-            character.position.x = targetX * scale;
-            character.position.y = targetY * scale;
-        } else {
-            character.position.x = targetX;
-            character.position.y = targetY;
+        // Store original move speed if not already boosted
+        if (!character.dashSpeedBoostActive) {
+            character.originalMoveSpeed = character.moveSpeed;
         }
+        
+        // Apply speed boost
+        character.moveSpeed = character.originalMoveSpeed * speedMultiplier;
+        character.dashSpeedBoostActive = true;
+        character.dashSpeedBoostEnd = Date.now() + duration;
         
         // Create visual effect
         this.activeEffects.push({
             type: 'dash',
             character: character,
             startTime: Date.now(),
-            duration: 200
+            duration: duration
         });
+        
+        console.log(`Bolt dash activated! Speed boosted to ${character.moveSpeed} for 3 seconds`);
         
         return true;
     }
@@ -86,6 +80,9 @@ export class AbilitySystem {
         const slamRadius = 120;
         const baseDamage = ability.baseDamage || 40;
         const stunDuration = 1000; // 1 second stun
+        
+        // Clear preview
+        this.groundSlamPreview = null;
         
         // Find all characters in range
         const hitCharacters = [];
@@ -124,6 +121,24 @@ export class AbilitySystem {
         return true;
     }
     
+    // Update ground slam preview (called when button is held)
+    updateGroundSlamPreview(character, isCharging) {
+        if (isCharging && character.specialAbility && character.specialAbility.type === 'groundSlam') {
+            const slamRadius = 120;
+            this.groundSlamPreview = {
+                position: character.position.clone(),
+                radius: slamRadius
+            };
+        } else {
+            this.groundSlamPreview = null;
+        }
+    }
+    
+    // Get ground slam preview for rendering
+    getGroundSlamPreview() {
+        return this.groundSlamPreview;
+    }
+    
     // Update ability effects
     update(deltaTime) {
         const now = Date.now();
@@ -138,6 +153,15 @@ export class AbilitySystem {
             if (character.stunned && character.stunnedUntil <= now) {
                 character.stunned = false;
                 character.stunnedUntil = 0;
+            }
+            
+            // Update dash speed boost
+            if (character.dashSpeedBoostActive && character.dashSpeedBoostEnd <= now) {
+                // Restore original move speed
+                character.moveSpeed = character.originalMoveSpeed;
+                character.dashSpeedBoostActive = false;
+                character.dashSpeedBoostEnd = 0;
+                console.log(`Bolt dash ended! Speed restored to ${character.moveSpeed}`);
             }
         });
     }

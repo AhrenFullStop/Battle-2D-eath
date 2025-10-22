@@ -2,7 +2,9 @@
 
 import { Vector2D } from '../utils/Vector2D.js';
 import { Weapon, WeaponPickup } from '../entities/Weapon.js';
+import { Consumable } from '../entities/Consumable.js';
 import { createWeapon } from '../config/weapons.js';
+import { createConsumable } from '../config/consumables.js';
 import { MAP_CONFIG } from '../config/map.js';
 
 export class AISystem {
@@ -136,6 +138,9 @@ export class AISystem {
     
     // Execute patrol behavior
     executePatrol(ai, deltaTime) {
+        // Check if AI is stuck on obstacle
+        this.checkIfStuck(ai, deltaTime);
+        
         // Check if near boundary and need to turn away
         const avoidDirection = this.getAvoidBoundaryDirection(ai);
         
@@ -147,6 +152,12 @@ export class AISystem {
         } else {
             // Normal wandering
             wanderDirection = ai.getWanderDirection();
+        }
+        
+        // Add unstuck vector if AI is stuck (more aggressive)
+        if (ai.isStuck && ai.unstuckDirection) {
+            wanderDirection.add(ai.unstuckDirection.multiply(3));
+            wanderDirection.normalize();
         }
         
         // Set velocity for wandering
@@ -198,8 +209,78 @@ export class AISystem {
         }
     }
     
+    // Check if AI is stuck and add unstuck behavior
+    checkIfStuck(ai, deltaTime) {
+        // Initialize stuck tracking if not present
+        if (!ai.lastPosition) {
+            ai.lastPosition = ai.position.clone();
+            ai.stuckTimer = 0;
+            ai.isStuck = false;
+            ai.unstuckDirection = null;
+            ai.unstuckTimer = 0;
+            ai.unstuckAttempts = 0;
+            return;
+        }
+        
+        // Check if AI has moved significantly
+        const distanceMoved = ai.position.distanceTo(ai.lastPosition);
+        const expectedMovement = ai.moveSpeed * deltaTime * 0.15; // More sensitive - expect at least 15% of speed
+        
+        if (distanceMoved < expectedMovement && ai.velocity.magnitude() > 0.5) {
+            // AI is trying to move but not moving much - likely stuck
+            ai.stuckTimer += deltaTime;
+            
+            if (ai.stuckTimer > 0.3 && !ai.isStuck) {
+                // Stuck for more than 0.3 seconds (reduced from 0.5)
+                ai.isStuck = true;
+                ai.unstuckTimer = 2.0; // Try to unstuck for 2 seconds (increased)
+                ai.unstuckAttempts++;
+                
+                // Generate a more aggressive unstuck direction
+                // Try moving perpendicular or opposite to current velocity
+                let unstuckAngle;
+                if (ai.unstuckAttempts % 3 === 0) {
+                    // Every 3rd attempt, try moving backward
+                    unstuckAngle = ai.velocity.angle() + Math.PI;
+                } else {
+                    // Otherwise try perpendicular with some randomness
+                    const perpOffset = (Math.random() - 0.5) * Math.PI * 0.5;
+                    unstuckAngle = ai.velocity.angle() + Math.PI / 2 + perpOffset;
+                }
+                
+                ai.unstuckDirection = new Vector2D(
+                    Math.cos(unstuckAngle),
+                    Math.sin(unstuckAngle)
+                );
+                
+                console.log(`AI ${ai.name} is stuck (attempt ${ai.unstuckAttempts}), trying to unstuck at angle ${(unstuckAngle * 180 / Math.PI).toFixed(0)}°`);
+            }
+        } else {
+            // AI is moving normally - reset stuck timer
+            if (ai.stuckTimer > 0) {
+                ai.stuckTimer = Math.max(0, ai.stuckTimer - deltaTime * 2); // Decay faster when moving
+            }
+        }
+        
+        // Update unstuck timer
+        if (ai.isStuck) {
+            ai.unstuckTimer -= deltaTime;
+            if (ai.unstuckTimer <= 0) {
+                ai.isStuck = false;
+                ai.unstuckDirection = null;
+                ai.stuckTimer = 0;
+                console.log(`AI ${ai.name} unstuck attempt ended`);
+            }
+        }
+        
+        // Update last position
+        ai.lastPosition = ai.position.clone();
+    }
+    
     // Execute combat behavior
     executeCombat(ai, deltaTime) {
+        // Check if AI is stuck on obstacle
+        this.checkIfStuck(ai, deltaTime);
         if (!ai.targetEnemy || ai.targetEnemy.isDead) {
             ai.setState('patrol');
             return;
@@ -209,11 +290,17 @@ export class AISystem {
         
         // Move towards enemy if too far
         if (distanceToEnemy > ai.combatRange * 0.7) {
-            const direction = new Vector2D(
+            let direction = new Vector2D(
                 ai.targetEnemy.position.x - ai.position.x,
                 ai.targetEnemy.position.y - ai.position.y
             );
             direction.normalize();
+            
+            // Add unstuck vector if AI is stuck (more aggressive)
+            if (ai.isStuck && ai.unstuckDirection) {
+                direction.add(ai.unstuckDirection.multiply(2.5));
+                direction.normalize();
+            }
             
             ai.velocity.x = direction.x * ai.moveSpeed * 0.8;
             ai.velocity.y = direction.y * ai.moveSpeed * 0.8;
@@ -257,6 +344,8 @@ export class AISystem {
     
     // Execute move to safe zone behavior (Phase 6)
     executeMoveToSafeZone(ai, deltaTime) {
+        // Check if AI is stuck on obstacle
+        this.checkIfStuck(ai, deltaTime);
         if (!this.gameState.safeZoneSystem) {
             ai.setState('patrol');
             return;
@@ -272,14 +361,22 @@ export class AISystem {
         
         const distanceToCenter = directionToCenter.magnitude();
         
-        // If we're now inside safe zone, switch back to normal behavior
-        if (distanceToCenter <= safeZoneInfo.currentRadius) {
+        // Only switch back to patrol when comfortably inside safe zone (70% of radius)
+        // This prevents NPCs from oscillating on the boundary
+        if (distanceToCenter <= safeZoneInfo.currentRadius * 0.7) {
             ai.setState('patrol');
             return;
         }
         
         // Move at full speed towards safe zone
         directionToCenter.normalize();
+        
+        // Add unstuck vector if AI is stuck (more aggressive)
+        if (ai.isStuck && ai.unstuckDirection) {
+            directionToCenter.add(ai.unstuckDirection.multiply(2.5));
+            directionToCenter.normalize();
+        }
+        
         ai.velocity.x = directionToCenter.x * ai.moveSpeed * 1.2; // 20% faster when escaping zone
         ai.velocity.y = directionToCenter.y * ai.moveSpeed * 1.2;
         ai.facingAngle = directionToCenter.angle();
@@ -292,6 +389,8 @@ export class AISystem {
     
     // Execute flee behavior
     executeFlee(ai, deltaTime) {
+        // Check if AI is stuck on obstacle
+        this.checkIfStuck(ai, deltaTime);
         if (!ai.targetEnemy) {
             ai.setState('patrol');
             return;
@@ -307,7 +406,7 @@ export class AISystem {
         const avoidDirection = this.getAvoidBoundaryDirection(ai);
         if (avoidDirection) {
             // Blend flee direction with boundary avoidance
-            fleeDirection.add(avoidDirection.scale(2)); // Weight boundary avoidance more
+            fleeDirection.add(avoidDirection.multiply(2)); // Weight boundary avoidance more
         }
         
         // Also check if fleeing towards safe zone if outside
@@ -321,11 +420,17 @@ export class AISystem {
                 );
                 toSafeZone.normalize();
                 // Blend flee with moving to safe zone
-                fleeDirection.add(toSafeZone.scale(1.5));
+                fleeDirection.add(toSafeZone.multiply(1.5));
             }
         }
         
         fleeDirection.normalize();
+        
+        // Add unstuck vector if AI is stuck (more aggressive)
+        if (ai.isStuck && ai.unstuckDirection) {
+            fleeDirection.add(ai.unstuckDirection.multiply(2.5));
+            fleeDirection.normalize();
+        }
         
         ai.velocity.x = fleeDirection.x * ai.moveSpeed; // Full speed when fleeing
         ai.velocity.y = fleeDirection.y * ai.moveSpeed;
@@ -479,11 +584,32 @@ export class AISystem {
     
     // Handle character death
     handleCharacterDeath(character) {
-        if (character.isDead && character.weapons.length > 0) {
-            // Only drop 1 random weapon to prevent weapon spam
-            const randomWeapon = character.weapons[Math.floor(Math.random() * character.weapons.length)];
-            this.spawnWeapon(character.position.clone(), randomWeapon.weaponType, randomWeapon.tier);
+        if (character.isDead) {
+            // Drop consumables randomly: 70% health kit, 25% shield potion, 5% nothing
+            const dropChance = Math.random();
+            
+            if (dropChance < 0.70) {
+                // 70% chance to drop health kit
+                this.spawnConsumable(character.position.clone(), 'healthKit');
+            } else if (dropChance < 0.95) {
+                // 25% chance to drop shield potion
+                this.spawnConsumable(character.position.clone(), 'shieldPotion');
+            }
+            // 5% chance to drop nothing (dropChance >= 0.95)
         }
+    }
+    
+    // Spawn a consumable on the ground
+    spawnConsumable(position, consumableType) {
+        const consumable = new Consumable(createConsumable(consumableType));
+        consumable.setPosition(position.x, position.y);
+        
+        // Add to game state consumables array (needs to be passed from main.js)
+        if (this.gameState.consumables) {
+            this.gameState.consumables.push(consumable);
+        }
+        
+        return consumable;
     }
     
     // Get available weapons for rendering
