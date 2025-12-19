@@ -179,40 +179,48 @@ Design constraints:
 - Still static-site compatible.
 - Keep tech simple (vanilla JS + HTML/CSS + canvas as needed).
 
-- [ ] Define menu navigation model
+- [x] Define menu navigation model
   - User story: As a user, I can move between: Home → Solo → Multiplayer → Map Editor.
   - Acceptance:
     - Clear states and transitions documented.
     - Single “source of truth” for menu state.
 
-- [ ] Decide: Canvas StartScreen vs DOM overlay UI
+- [x] Decide: Canvas StartScreen vs DOM overlay UI
   - User story: As the project, we pick one UI approach that’s scalable and accessible.
   - Acceptance:
     - Decision recorded (with rationale) in this doc’s “Decision Log”.
     - Implementation tasks below reflect the chosen approach.
 
-- [ ] Render real image backgrounds in map selection
+- [x] Render real image backgrounds in map selection
   - User story: As a player, I see the actual background image for image-based maps.
   - Acceptance:
     - Map cards show the real JPEG/PNG when `background.type === 'image'`.
     - Image loads are cached and do not hitch scrolling.
 
-- [ ] Add menu access to the Map Editor
+- [x] Add menu access to the Map Editor
   - User story: As a player/creator, I can launch the editor from the main menu.
   - Acceptance:
     - “Map Editor” entry exists in menu.
     - Opens editor without manual URL typing.
 
-- [ ] Add menu entry for Multiplayer (stub)
+- [x] Add menu entry for Multiplayer (stub)
   - User story: As a player, I can see Multiplayer is a first-class mode.
   - Acceptance:
     - Menu includes Multiplayer button.
     - For now, shows a simple “coming soon” placeholder (no extra screens beyond what’s required).
 
+### Decision Log (Menu)
+- 2025-12-19 — Keep **Canvas StartScreen** (vs DOM overlay): minimizes churn, stays static-site friendly, and reuses existing input + rendering paths while still supporting scalable map previews via cached image loading.
+
 Milestone Completion Notes (fill in when done):
 - Summary:
+  - Added a simple navigation model with states: **Home → Solo → Multiplayer** (placeholder) and **Map Editor** (links to `editor.html`).
+  - Map cards now render real background images for image-based maps using a small in-memory cache + best-effort preloading to avoid scroll hitching.
 - Files touched:
+  - [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
+  - [docs/Technical Roadmap Tracker.md](Technical%20Roadmap%20Tracker.md)
 - Key decisions:
+  - Kept the menu canvas-driven for now; added a minimal state machine (`menuState`) as the single source of truth.
 
 ## Milestone 3 — GitHub Pages asset correctness (P1)
 Goal: Maps and backgrounds behave identically on localhost and GitHub Pages.
@@ -417,3 +425,14 @@ Milestone Completion Notes (fill in when done):
 
 - [ ] Add minimal debug overlay toggles for AI + networking
   - Acceptance: One flag enables rendering of AI state and target info.
+
+
+(ignore) Notes:
+- If a few (2+) bots sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
+- refactor manifest to remove bushcount etc.
+- map editor doesn't load images from directory, instead from manifest. this is dumb
+- ensure weapons don't spawn on rocks
+- consider swapping out rocks and trees for png's (maybe some color tweaks allowed)
+- Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
+- left align the came over stats
+- add a slight bounce from rocks to make them easier to navigate around

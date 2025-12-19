@@ -310,8 +310,8 @@ Defines Bolt and Boulder stats:
 export const CHARACTERS = {
   bolt: {
     name: 'Bolt',
-    maxHP: 80,
-    moveSpeed: 250,
+    maxHP: 80, //max base of 100 (can go over with modifiers)
+    moveSpeed: 100, //max base of 100 (can go over with modifiers)
     hitboxRadius: 20,
     // ... more stats
   },

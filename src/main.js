@@ -90,8 +90,18 @@ class Game {
         console.log('Starting game with character:', this.selectedCharacter);
         console.log('Starting game with map:', this.selectedMap?.name || 'Random Arena');
         
-        // Load selected map if it's a custom map
-        if (this.selectedMap && this.selectedMap.file) {
+        // Load selected map.
+        // NOTE: StartScreen preloads map JSON into `selectedMap.mapData` and applies menu overrides
+        // into `mapData.gameConfig`. Prefer that to avoid discarding overrides.
+        if (this.selectedMap && this.selectedMap.mapData) {
+            try {
+                loadMapFromJSON(this.selectedMap.mapData);
+                console.log('✅ Successfully loaded selected map (with menu overrides):', this.selectedMap.mapData.name);
+            } catch (error) {
+                console.error('❌ Error loading selected map data:', error);
+                console.log('Falling back to default procedural map');
+            }
+        } else if (this.selectedMap && this.selectedMap.file) {
             try {
                 const mapPath = `maps/${this.selectedMap.file}`;
                 console.log('Fetching map file:', mapPath);

@@ -5,7 +5,7 @@ export const WEAPON_TYPES = {
         name: 'Blaster',
         type: 'blaster',
         attackType: 'cone',
-        baseDamage: 25,
+        baseDamage: 15,
         baseRange: 150,
         baseCooldown: 1500, // milliseconds
         coneAngle: 45, // degrees
@@ -21,10 +21,11 @@ export const WEAPON_TYPES = {
         name: 'Spear',
         type: 'spear',
         attackType: 'projectile',
-        baseDamage: 35,
+        baseDamage: 25,
         baseRange: 300,
         baseCooldown: 2000,
         projectileSpeed: 500,
+        coneAngle: 15, 
         tierMultipliers: {
             damage: [1.0, 1.4, 1.8],
             range: [1.0, 1.3, 1.6]
@@ -37,7 +38,7 @@ export const WEAPON_TYPES = {
         name: 'Bomb',
         type: 'bomb',
         attackType: 'aoe',
-        baseDamage: 45,
+        baseDamage: 35,
         baseRange: 250,
         baseCooldown: 3000,
         explosionRadius: 80,
@@ -54,12 +55,13 @@ export const WEAPON_TYPES = {
         name: 'Gun',
         type: 'gun',
         attackType: 'burst',
-        baseDamage: 15,
+        baseDamage: 5,
         baseRange: 280,
         baseCooldown: 1800,
         burstCount: 3,
         burstDelay: 100,
         projectileSpeed: 600,
+        coneAngle: 5, 
         tierMultipliers: {
             damage: [1.0, 1.4, 1.8],
             range: [1.0, 1.3, 1.6]

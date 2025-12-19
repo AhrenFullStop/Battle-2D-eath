@@ -73,7 +73,7 @@ export class PhysicsSystem {
             const magnitude = inputVector.magnitude();
             if (magnitude > 0) {
                 inputVector.normalize();
-                inputVector.multiply(character.moveSpeed);
+                inputVector.multiply(character.moveSpeed * 2.5); // Slightly boost speed for responsiveness
                 character.velocity.set(inputVector.x, inputVector.y);
             }
         }

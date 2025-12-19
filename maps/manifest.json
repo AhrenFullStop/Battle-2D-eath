@@ -13,6 +13,18 @@
       }
     },
     {
+      "file": "Winterfell.json",
+      "name": "Winterfell",
+      "radius": 1400,
+      "bushCount": 0,
+      "obstacleCount": 0,
+      "waterCount": 0,
+      "background": {
+        "type": "image",
+        "value": "winterfell.png"
+      }
+    },
+    {
       "file": "facey.json",
       "name": "Facey Map",
       "radius": 1400,

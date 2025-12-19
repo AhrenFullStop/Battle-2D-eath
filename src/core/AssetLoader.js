@@ -9,6 +9,7 @@ export class AssetLoader {
         
         // Asset categories
         this.characterImages = new Map();
+        this.characterMenuPreviewImages = new Map();
         this.weaponImages = new Map();
         this.consumableImages = new Map();
     }
@@ -70,6 +71,10 @@ export class AssetLoader {
             // Character assets
             { key: 'char_bolt', path: 'assets/characters/bolt.png', category: 'character', type: 'bolt' },
             { key: 'char_boulder', path: 'assets/characters/boulder.png', category: 'character', type: 'boulder' },
+
+            // Character menu preview assets (optional)
+            { key: 'char_menu_bolt', path: 'assets/utils/bolt_preview.png', category: 'characterMenu', type: 'bolt' },
+            { key: 'char_menu_boulder', path: 'assets/utils/boulder_preview.png', category: 'characterMenu', type: 'boulder' },
             
             // Weapon assets
             { key: 'weapon_blaster', path: 'assets/weapons/blaster.png', category: 'weapon', type: 'blaster' },
@@ -93,6 +98,8 @@ export class AssetLoader {
                 // Store in category-specific maps for easy retrieval
                 if (category === 'character') {
                     this.characterImages.set(type, img);
+                } else if (category === 'characterMenu') {
+                    this.characterMenuPreviewImages.set(type, img);
                 } else if (category === 'weapon') {
                     this.weaponImages.set(type, img);
                 } else if (category === 'consumable') {
@@ -138,6 +145,12 @@ export class AssetLoader {
         return (img && img.complete) ? img : null;
     }
 
+    // Get character menu preview image by type (bolt, boulder)
+    getCharacterMenuPreviewImage(characterType) {
+        const img = this.characterMenuPreviewImages.get(characterType);
+        return (img && img.complete) ? img : null;
+    }
+
     // Check if character image is loaded
     hasCharacterImage(characterType) {
         const img = this.characterImages.get(characterType);
@@ -178,6 +191,7 @@ export class AssetLoader {
     clear() {
         this.images.clear();
         this.characterImages.clear();
+        this.characterMenuPreviewImages.clear();
         this.weaponImages.clear();
         this.consumableImages.clear();
         this.loadedCount = 0;
