@@ -436,3 +436,5 @@ Milestone Completion Notes (fill in when done):
 - Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
 - left align the came over stats
 - add a slight bounce from rocks to make them easier to navigate around
+- add a favicon
+- change deployment to automatically add a version counter. Display version on bottom of 
