@@ -8,6 +8,8 @@ export class CombatSystem {
     constructor(gameState, eventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
+
+        this.disposed = false;
         
         // Track active effects and projectiles
         this.weaponEffects = [];
@@ -181,6 +183,7 @@ export class CombatSystem {
         
         for (let i = 0; i < burstCount; i++) {
             setTimeout(() => {
+                if (this.disposed) return;
                 const projectile = new Projectile(attackData);
                 // Add slight spread to burst
                 const spread = (Math.random() - 0.5) * 0.1;
@@ -262,8 +265,12 @@ export class CombatSystem {
     
     // Apply damage to a target
     applyDamage(target, damage, sourcePosition, attacker = null) {
+        const wasDead = target.isDead;
+
         // Apply damage to character
         target.takeDamage(damage);
+
+        const killedNow = !wasDead && target.isDead;
         
         // Create damage number
         const damageNumber = new DamageNumber(
@@ -280,6 +287,15 @@ export class CombatSystem {
             sourcePosition: sourcePosition,
             attacker: attacker
         });
+
+        if (killedNow) {
+            this.eventBus.emit('characterKilled', {
+                target: target,
+                attacker: attacker,
+                sourcePosition: sourcePosition,
+                damage: damage
+            });
+        }
     }
     
     // Get all weapon effects for rendering
@@ -302,5 +318,10 @@ export class CombatSystem {
         this.weaponEffects = [];
         this.projectiles = [];
         this.damageNumbers = [];
+    }
+
+    dispose() {
+        this.disposed = true;
+        this.clear();
     }
 }

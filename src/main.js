@@ -70,6 +70,12 @@ class Game {
         // Setup window resize handler
         window.addEventListener('resize', () => this.onResize());
         // Initial resize will be called after systems are initialized
+
+        // End screen interaction (single handler; avoids duplicate listeners across resets)
+        this.onEndScreenTouchEndBound = (e) => this.handleEndScreenTouchEnd(e);
+        this.onEndScreenMouseUpBound = (e) => this.handleEndScreenMouseUp(e);
+        this.canvas.addEventListener('touchend', this.onEndScreenTouchEndBound, { passive: false });
+        this.canvas.addEventListener('mouseup', this.onEndScreenMouseUpBound);
         
         // Setup start screen interaction
         this.setupStartScreenInteraction();
@@ -162,6 +168,93 @@ class Game {
                 this.gameState.addDamage(data.damage);
             }
         });
+
+        // Track kills only when player actually gets the kill
+        this.eventBus.on('characterKilled', (data) => {
+            if (data.attacker && data.attacker.isPlayer && data.target && !data.target.isPlayer) {
+                this.gameState.addKill();
+            }
+        });
+    }
+
+    getCanvasCoordinates(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    handleEndScreenTouchEnd(event) {
+        if (!this.gameState || this.gameState.phase === 'playing') return;
+        if (!event.changedTouches || event.changedTouches.length === 0) return;
+
+        const touch = event.changedTouches[0];
+        const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
+        this.tryHandleReturnToMenu(coords.x, coords.y);
+    }
+
+    handleEndScreenMouseUp(event) {
+        if (!this.gameState || this.gameState.phase === 'playing') return;
+        const coords = this.getCanvasCoordinates(event.clientX, event.clientY);
+        this.tryHandleReturnToMenu(coords.x, coords.y);
+    }
+
+    tryHandleReturnToMenu(x, y) {
+        if (!this.renderer || !this.renderer.uiRenderer) return;
+        if (this.gameState.phase !== 'gameOver' && this.gameState.phase !== 'victory') return;
+
+        if (this.renderer.uiRenderer.isReturnToMenuHit(x, y)) {
+            this.resetToMenu();
+        }
+    }
+
+    resetToMenu() {
+        console.log('Resetting to menu...');
+
+        // Stop running match loop
+        if (this.gameLoop) {
+            this.gameLoop.stop();
+            this.gameLoop = null;
+        }
+
+        // Teardown systems and listeners that would otherwise duplicate
+        if (this.inputSystem) {
+            this.inputSystem.removeEventListeners();
+        }
+        if (this.eventBus) {
+            this.eventBus.clear();
+        }
+        if (this.combatSystem && typeof this.combatSystem.dispose === 'function') {
+            this.combatSystem.dispose();
+        }
+
+        // Clear references
+        this.gameState = null;
+        this.eventBus = null;
+        this.inputSystem = null;
+        this.physicsSystem = null;
+        this.combatSystem = null;
+        this.safeZoneSystem = null;
+        this.aiSystem = null;
+        this.abilitySystem = null;
+        this.cameraSystem = null;
+        this.renderer = null;
+        this.consumables = [];
+
+        // Recreate StartScreen (and its listeners) exactly once
+        if (this.startScreen) {
+            this.startScreen.removeEventListeners();
+        }
+        this.startScreen = new StartScreen(this.canvas, this.ctx, this.assetLoader);
+
+        // Return to menu phase and restart the menu loop
+        this.phase = 'start';
+        if (this.startScreenLoop) {
+            this.startScreenLoop.start();
+        }
     }
 
     // Initialize the game
@@ -382,10 +475,6 @@ class Game {
         this.gameState.characters.forEach(character => {
             if (character.isDead && !character.isPlayer) {
                 this.aiSystem.handleCharacterDeath(character);
-                // Track kills if player dealt damage
-                if (!character.isPlayer) {
-                    this.gameState.addKill();
-                }
             }
         });
         

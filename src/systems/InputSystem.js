@@ -77,6 +77,15 @@ export class InputSystem {
         // Health kit usage state
         this.healthKitUsed = false;
         
+        // Bound listeners (so we can remove them on reset)
+        this.onTouchStartBound = (e) => this.onTouchStart(e);
+        this.onTouchMoveBound = (e) => this.onTouchMove(e);
+        this.onTouchEndBound = (e) => this.onTouchEnd(e);
+        this.onTouchCancelBound = (e) => this.onTouchEnd(e);
+        this.onMouseDownBound = (e) => this.onMouseDown(e);
+        this.onMouseMoveBound = (e) => this.onMouseMove(e);
+        this.onMouseUpBound = (e) => this.onMouseUp(e);
+
         // Setup event listeners
         this.setupEventListeners();
     }
@@ -84,15 +93,26 @@ export class InputSystem {
     // Setup touch event listeners
     setupEventListeners() {
         // Prevent default touch behaviors
-        this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
-        this.canvas.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
-        this.canvas.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
-        this.canvas.addEventListener('touchcancel', (e) => this.onTouchEnd(e), { passive: false });
+        this.canvas.addEventListener('touchstart', this.onTouchStartBound, { passive: false });
+        this.canvas.addEventListener('touchmove', this.onTouchMoveBound, { passive: false });
+        this.canvas.addEventListener('touchend', this.onTouchEndBound, { passive: false });
+        this.canvas.addEventListener('touchcancel', this.onTouchCancelBound, { passive: false });
         
         // Mouse events for desktop testing
-        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-        this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+        this.canvas.addEventListener('mousedown', this.onMouseDownBound);
+        this.canvas.addEventListener('mousemove', this.onMouseMoveBound);
+        this.canvas.addEventListener('mouseup', this.onMouseUpBound);
+    }
+
+    // Remove all input listeners (used when resetting back to menu)
+    removeEventListeners() {
+        this.canvas.removeEventListener('touchstart', this.onTouchStartBound);
+        this.canvas.removeEventListener('touchmove', this.onTouchMoveBound);
+        this.canvas.removeEventListener('touchend', this.onTouchEndBound);
+        this.canvas.removeEventListener('touchcancel', this.onTouchCancelBound);
+        this.canvas.removeEventListener('mousedown', this.onMouseDownBound);
+        this.canvas.removeEventListener('mousemove', this.onMouseMoveBound);
+        this.canvas.removeEventListener('mouseup', this.onMouseUpBound);
     }
 
     // Get canvas-relative coordinates from touch/mouse event

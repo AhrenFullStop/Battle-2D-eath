@@ -6,6 +6,11 @@ export class UIRenderer {
     constructor(ctx, canvas) {
         this.ctx = ctx;
         this.canvas = canvas;
+
+        // Cached UI bounds for match-end interactions
+        this.matchEndUI = {
+            returnToMenuButton: null
+        };
     }
 
     // Render all UI elements
@@ -295,6 +300,9 @@ export class UIRenderer {
     renderMatchEndScreen(gameState) {
         const ctx = this.ctx;
         ctx.save();
+
+        // Reset cached bounds each render
+        this.matchEndUI.returnToMenuButton = null;
         
         // Calculate scale based on canvas size
         const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
@@ -362,14 +370,48 @@ export class UIRenderer {
         ctx.fillText(`⚔️ Kills: ${stats.kills}`, centerX, statsY + lineHeight);
         ctx.fillText(`💥 Damage: ${Math.round(stats.damageDealt)}`, centerX, statsY + lineHeight * 2);
         ctx.fillText(`⏱️ Survival: ${Math.floor(stats.survivalTime)}s`, centerX, statsY + lineHeight * 3);
-        
-        // Instruction to reload with animation
+
+        // Return to Menu button
+        const buttonWidth = Math.min(340 * scale, this.canvas.width * 0.75);
+        const buttonHeight = Math.max(56 * scale, 44);
+        const buttonX = centerX - buttonWidth / 2;
+        const buttonY = statsBoxY + statsBoxHeight + 30 * scale;
+        const buttonRadius = 14;
+
+        this.matchEndUI.returnToMenuButton = {
+            x: buttonX,
+            y: buttonY,
+            width: buttonWidth,
+            height: buttonHeight
+        };
+
+        // Button background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, buttonRadius);
+        ctx.fill();
+        ctx.stroke();
+
+        // Button label
         ctx.font = `bold ${instructionSize}px Arial`;
-        const alpha = 0.5 + Math.sin(Date.now() / 500) * 0.3;
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillText('↻ Refresh page to play again', centerX, centerY + 210 * scale);
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Return to Menu', centerX, buttonY + buttonHeight / 2);
         
         ctx.restore();
+    }
+
+    isReturnToMenuHit(screenX, screenY) {
+        const rect = this.matchEndUI.returnToMenuButton;
+        if (!rect) return false;
+        return (
+            screenX >= rect.x &&
+            screenX <= rect.x + rect.width &&
+            screenY >= rect.y &&
+            screenY <= rect.y + rect.height
+        );
     }
     
     // Helper to draw rounded rectangle
