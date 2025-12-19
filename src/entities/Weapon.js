@@ -281,6 +281,9 @@ export class WeaponPickup extends Entity {
         this.currentPickupProgress = 0;
         this.isBeingPickedUp = false;
         this.pickupCharacter = null;
+
+        // UI hint (set externally by pickup logic; used by renderer)
+        this.playerPickupBlockedReason = null;
     }
     
     // Update pickup animation

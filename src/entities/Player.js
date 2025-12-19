@@ -1,7 +1,6 @@
 // Player-specific character class
 
 import { Character } from './Character.js';
-import { Weapon } from './Weapon.js';
 
 export class Player extends Character {
     constructor(config) {
@@ -39,18 +38,5 @@ export class Player extends Character {
             return weapon.fire(this.position, aimAngle, this.weaponCooldownMultiplier || 1.0);
         }
         return null;
-    }
-
-    // Try to pickup a weapon
-    tryPickupWeapon(weaponConfig) {
-        // Check if already has this exact weapon (type and tier)
-        if (this.hasWeapon(weaponConfig.type, weaponConfig.tier)) {
-            return false; // Can't pickup exact duplicate
-        }
-
-        // Create weapon instance and try to add to inventory
-        const weapon = new Weapon(weaponConfig);
-        const success = this.addWeapon(weapon);
-        return success;
     }
 }

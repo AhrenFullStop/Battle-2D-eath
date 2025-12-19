@@ -2,6 +2,7 @@
 
 import { Entity } from './Entity.js';
 import { Vector2D } from '../utils/Vector2D.js';
+import { Weapon } from './Weapon.js';
 
 export class Character extends Entity {
     constructor(config) {
@@ -252,5 +253,94 @@ export class Character extends Entity {
     // Get weapon count
     getWeaponCount() {
         return this.weapons.length;
+    }
+
+    /**
+     * Determine whether a weapon pickup would succeed without mutating inventory.
+     *
+     * @param {{type: string, tier: number}} weaponConfig
+     * @returns {{ok: boolean, reason: string|null}}
+     */
+    getWeaponPickupResult(weaponConfig) {
+        // Duplicate same type+tier
+        if (this.hasWeapon(weaponConfig.type, weaponConfig.tier)) {
+            return { ok: false, reason: 'duplicate_same_tier' };
+        }
+
+        // Reject lower tier than an already-owned weapon of the same type
+        const sameTypeIndex = this.findSameWeaponTypeIndex(weaponConfig.type);
+        if (sameTypeIndex !== -1) {
+            const existing = this.weapons[sameTypeIndex];
+            if (existing && existing.tier > weaponConfig.tier) {
+                return { ok: false, reason: 'lower_than_equipped' };
+            }
+        }
+
+        // Has room
+        if (this.weapons.length < this.maxWeapons) {
+            return { ok: true, reason: null };
+        }
+
+        // Inventory full: allow upgrades, otherwise reject.
+        // - Same type: only higher tier is allowed (lower/same handled above).
+        if (sameTypeIndex !== -1) {
+            const existing = this.weapons[sameTypeIndex];
+            if (existing && weaponConfig.tier > existing.tier) {
+                return { ok: true, reason: null };
+            }
+            return { ok: false, reason: 'inventory_full_no_replace' };
+        }
+
+        // - Different type: only replace if strictly better than the lowest-tier weapon.
+        const lowestTierIndex = this.findLowestTierWeaponIndex();
+        const lowest = this.weapons[lowestTierIndex];
+        if (lowest && weaponConfig.tier > lowest.tier) {
+            return { ok: true, reason: null };
+        }
+
+        return { ok: false, reason: 'inventory_full_no_replace' };
+    }
+
+    /**
+     * Try to pick up a weapon using the inventory rules.
+     *
+     * @param {object} weaponConfig
+     * @returns {{ok: boolean, reason: string|null}}
+     */
+    tryPickupWeapon(weaponConfig) {
+        const eligibility = this.getWeaponPickupResult(weaponConfig);
+        if (!eligibility.ok) return eligibility;
+
+        const weapon = new Weapon(weaponConfig);
+        weapon.setOwner(this);
+
+        // Has room
+        if (this.weapons.length < this.maxWeapons) {
+            this.weapons.push(weapon);
+            return { ok: true, reason: null };
+        }
+
+        // Inventory full: apply same rules as eligibility.
+        const sameTypeIndex = this.findSameWeaponTypeIndex(weapon.weaponType);
+        if (sameTypeIndex !== -1) {
+            const existing = this.weapons[sameTypeIndex];
+            if (existing && weapon.tier > existing.tier) {
+                this.weapons[sameTypeIndex] = weapon;
+                return { ok: true, reason: null };
+            }
+            return { ok: false, reason: 'inventory_full_no_replace' };
+        }
+
+        const lowestTierIndex = this.findLowestTierWeaponIndex();
+        const lowest = this.weapons[lowestTierIndex];
+        if (lowest && weapon.tier > lowest.tier) {
+            this.weapons[lowestTierIndex] = weapon;
+            if (this.activeWeaponIndex >= this.weapons.length) {
+                this.activeWeaponIndex = 0;
+            }
+            return { ok: true, reason: null };
+        }
+
+        return { ok: false, reason: 'inventory_full_no_replace' };
     }
 }

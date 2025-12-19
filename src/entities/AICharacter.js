@@ -2,7 +2,6 @@
 
 import { Character } from './Character.js';
 import { Vector2D } from '../utils/Vector2D.js';
-import { Weapon } from './Weapon.js';
 
 export class AICharacter extends Character {
     constructor(config) {
@@ -140,16 +139,4 @@ export class AICharacter extends Character {
         this.setState('dead');
     }
     
-    // Try to pickup a weapon (same logic as Player)
-    tryPickupWeapon(weaponConfig) {
-        // Check if already has this exact weapon (type and tier)
-        if (this.hasWeapon(weaponConfig.type, weaponConfig.tier)) {
-            return false; // Can't pickup exact duplicate
-        }
-
-        // Create weapon instance and try to add to inventory
-        const weapon = new Weapon(weaponConfig);
-        const success = this.addWeapon(weapon);
-        return success;
-    }
 }

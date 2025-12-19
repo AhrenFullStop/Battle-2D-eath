@@ -28,10 +28,6 @@ Build an open source, offline, peer-to-peer (P2P) battle royale that is simple, 
 - Map editor exists as a separate entrypoint (editor.html).
 
 ### Known problems (confirmed in code)
-- **Weapon pickup “infinite loader” when pickup is invalid:** player pickup loop resets progress on failure.
-  - Root: on pickup completion, if `player.tryPickupWeapon(...)` returns false, pickup progress is reset and can immediately restart.
-  - See: player pickup loop in [src/main.js](../src/main.js)
-  - Also: weapon inventory rules (tier replacement / reject lower tier) in [src/entities/Character.js](../src/entities/Character.js)
 - **Map background images not shown in the menu:** StartScreen uses a placeholder gradient + “IMAGE” badge for image backgrounds rather than rendering the image.
   - See: preview rendering in [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
 - **Island map background image works on localhost but fails on GitHub Pages (reported):**
@@ -139,19 +135,19 @@ Milestone Completion Notes (fill in when done):
 ## Milestone 1 — Pickup UX correctness (P0)
 Goal: Pickups never “infinite load”; invalid pickups communicate why; rule matches design.
 
-- [ ] Return structured pickup results (success / reason)
+- [x] Return structured pickup results (success / reason)
   - User story: As UI, I can render “not pickupable” states reliably.
   - Acceptance:
     - `tryPickupWeapon(...)` (or equivalent) returns `{ ok: boolean, reason: string }`.
     - Reasons include at minimum: `duplicate_same_tier`, `lower_than_equipped`, `inventory_full_no_replace`.
 
-- [ ] Stop updating pickup progress when pickup is invalid
+- [x] Stop updating pickup progress when pickup is invalid
   - User story: As a player, I never see a loader for something I can’t pick up.
   - Acceptance:
     - If reason is non-pickupable, pickup progress does not begin.
     - If player leaves range, progress resets as today.
 
-- [ ] Add “not pickupable” visual treatment for weapon pickups
+- [x] Add “not pickupable” visual treatment for weapon pickups
   - User story: As a player, I can immediately tell why I can’t pick up an item.
   - Acceptance:
     - When non-pickupable: show a clear indicator (e.g., grew tint) in-world.
@@ -159,8 +155,22 @@ Goal: Pickups never “infinite load”; invalid pickups communicate why; rule m
 
 Milestone Completion Notes (fill in when done):
 - Summary:
+  - Weapon pickups now return structured results (`{ ok, reason }`) and share a single ruleset across player + AI.
+  - The pickup loader/progress never starts for invalid pickups (fixes the “infinite loader” loop).
+  - In-world pickups show a clear “blocked” state (dimmed + badge + short reason label) when the player is in range.
 - Files touched:
+  - [src/entities/Character.js](../src/entities/Character.js)
+  - [src/main.js](../src/main.js)
+  - [src/entities/Weapon.js](../src/entities/Weapon.js)
+  - [src/renderer/WeaponRenderer.js](../src/renderer/WeaponRenderer.js)
+  - [src/renderer/Renderer.js](../src/renderer/Renderer.js)
+  - [src/systems/AISystem.js](../src/systems/AISystem.js)
+  - [src/entities/Player.js](../src/entities/Player.js)
+  - [src/entities/AICharacter.js](../src/entities/AICharacter.js)
 - Key decisions:
+  - Canonical pickup rule evaluation lives in `Character.getWeaponPickupResult(...)` so UI gating, player pickup, and AI pickup all agree.
+  - `lower_than_equipped` is interpreted as “you already own this weapon type at a higher tier”.
+  - Rendering uses a lightweight flag on the pickup (`playerPickupBlockedReason`) set during the game update; indicator only appears while the player is in range.
 
 ## Milestone 2 — Menu overhaul + scalable content browsing (P0/P1)
 Goal: A menu that feels modern, scales to many characters/maps, and exposes editor + multiplayer.

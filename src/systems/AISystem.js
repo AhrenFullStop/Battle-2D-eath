@@ -654,23 +654,8 @@ export class AISystem {
     // Check if AI can pickup a weapon (eligibility check)
     canPickupWeapon(ai, weaponPickup) {
         const config = weaponPickup.getWeaponConfig();
-        const inventory = ai.weapons;
-        
-        // Has empty slot - can always pickup
-        if (inventory.length < 3) return true;
-        
-        // Check if this weapon type already owned at higher/same tier
-        const sameTypeWeapon = inventory.find(w => w.weaponType === config.type);
-        if (sameTypeWeapon && sameTypeWeapon.tier >= config.tier) {
-            return false; // Already have this weapon at same/better tier
-        }
-        
-        // Check if this weapon is better than lowest tier weapon
-        const lowestTierWeapon = inventory.reduce((lowest, w) =>
-            w.tier < lowest.tier ? w : lowest
-        );
-        
-        return config.tier > lowestTierWeapon.tier;
+        const result = ai.getWeaponPickupResult(config);
+        return result.ok;
     }
     
     // Pick up weapon
@@ -678,9 +663,9 @@ export class AISystem {
         const config = weaponPickup.getWeaponConfig();
         
         // Try to pickup weapon using AI's method
-        const success = ai.tryPickupWeapon(config);
+        const result = ai.tryPickupWeapon(config);
         
-        if (success) {
+        if (result.ok) {
             // Remove weapon from available list
             weaponPickup.active = false;
             const index = this.availableWeapons.indexOf(weaponPickup);

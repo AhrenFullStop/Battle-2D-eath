@@ -7,21 +7,23 @@ export class WeaponRenderer {
     }
     
     // Render all combat visuals
-    render(combatSystem, weaponPickups = []) {
+    render(combatSystem, weaponPickups = [], player = null) {
         // Render weapon pickups
-        weaponPickups.forEach(pickup => this.renderWeaponPickup(pickup));
+        weaponPickups.forEach(pickup => this.renderWeaponPickup(pickup, player));
         
         // Render weapon effects
-        const effects = combatSystem.getWeaponEffects();
-        effects.forEach(effect => this.renderWeaponEffect(effect));
+        if (combatSystem) {
+            const effects = combatSystem.getWeaponEffects();
+            effects.forEach(effect => this.renderWeaponEffect(effect));
         
-        // Render projectiles
-        const projectiles = combatSystem.getProjectiles();
-        projectiles.forEach(projectile => this.renderProjectile(projectile));
+            // Render projectiles
+            const projectiles = combatSystem.getProjectiles();
+            projectiles.forEach(projectile => this.renderProjectile(projectile));
         
-        // Render damage numbers
-        const damageNumbers = combatSystem.getDamageNumbers();
-        damageNumbers.forEach(number => this.renderDamageNumber(number));
+            // Render damage numbers
+            const damageNumbers = combatSystem.getDamageNumbers();
+            damageNumbers.forEach(number => this.renderDamageNumber(number));
+        }
     }
     
     // Render weapon effect
@@ -183,10 +185,14 @@ export class WeaponRenderer {
     }
 
     // Render weapon pickup
-    renderWeaponPickup(pickup) {
+    renderWeaponPickup(pickup, player = null) {
         const ctx = this.ctx;
         const x = pickup.position.x;
         const y = pickup.position.y + pickup.bobOffset;
+
+        const isPlayerInRange = !!(player && pickup.isInRange(player));
+        const blockedReason = isPlayerInRange ? pickup.playerPickupBlockedReason : null;
+        const isBlocked = !!blockedReason;
         
         ctx.save();
         
@@ -205,16 +211,57 @@ export class WeaponRenderer {
         ctx.fill();
         
         // Try to render as PNG, otherwise use circle
-        ctx.globalAlpha = 1.0;
+        ctx.globalAlpha = isBlocked ? 0.35 : 1.0;
         const rendered = this.renderWeaponPickupImage(pickup, x, y);
         
         if (!rendered) {
             // Fallback to circle rendering
             this.renderWeaponPickupCircle(pickup, x, y);
         }
+
+        // Draw a clear blocked indicator when in range and not pickupable
+        if (isBlocked) {
+            const badgeRadius = 10;
+            const badgeX = x + pickup.radius - 4;
+            const badgeY = y - pickup.radius + 4;
+
+            // Badge background
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.arc(badgeX, badgeY, badgeRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // X mark
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(badgeX - 4, badgeY - 4);
+            ctx.lineTo(badgeX + 4, badgeY + 4);
+            ctx.moveTo(badgeX + 4, badgeY - 4);
+            ctx.lineTo(badgeX - 4, badgeY + 4);
+            ctx.stroke();
+
+            // Reason label (short)
+            const reasonLabel = blockedReason === 'duplicate_same_tier'
+                ? 'DUP'
+                : blockedReason === 'lower_than_equipped'
+                    ? 'LOW'
+                    : 'FULL';
+
+            ctx.globalAlpha = 0.85;
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            ctx.strokeText(reasonLabel, x, y + pickup.radius + 6);
+            ctx.fillText(reasonLabel, x, y + pickup.radius + 6);
+        }
         
         // Draw pickup progress if being picked up
-        if (pickup.isBeingPickedUp) {
+        if (pickup.isBeingPickedUp && !isBlocked) {
             const progress = pickup.getPickupProgress();
             const progressRadius = pickup.radius + 12;
             

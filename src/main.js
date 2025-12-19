@@ -501,12 +501,23 @@ class Game {
             
             // Only update pickup for weapons player is near
             if (pickup.isInRange(player)) {
+                const config = pickup.getWeaponConfig();
+                const eligibility = player.getWeaponPickupResult(config);
+
+                // Never start/continue pickup progress for invalid pickups
+                if (!eligibility.ok) {
+                    pickup.playerPickupBlockedReason = eligibility.reason;
+                    pickup.resetPickup();
+                    return;
+                }
+
+                pickup.playerPickupBlockedReason = null;
+
                 // Update pickup progress
                 if (pickup.updatePickup(player, deltaTime)) {
-                    const config = pickup.getWeaponConfig();
-                    
                     // Try to pickup weapon
-                    if (player.tryPickupWeapon(config)) {
+                    const result = player.tryPickupWeapon(config);
+                    if (result.ok) {
                         // Successfully picked up
                         pickup.active = false;
                         
@@ -519,10 +530,13 @@ class Game {
                         
                         console.log(`Player picked up ${config.name} (Tier ${config.tier})`);
                     } else {
-                        // Couldn't pickup (duplicate), reset timer
+                        // If anything changed mid-pickup, stop the loader
+                        pickup.playerPickupBlockedReason = result.reason;
                         pickup.resetPickup();
                     }
                 }
+            } else {
+                pickup.playerPickupBlockedReason = null;
             }
         });
     }

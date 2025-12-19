@@ -45,7 +45,7 @@ export class Renderer {
                     pickup.update(0); // Update animations
                 }
             });
-            this.weaponRenderer.render(combatSystem, pickups);
+            this.weaponRenderer.render(combatSystem, pickups, gameState.player);
         }
         
         // Layer 3: Ground slam preview (if active)
