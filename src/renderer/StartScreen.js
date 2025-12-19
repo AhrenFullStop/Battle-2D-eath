@@ -374,6 +374,13 @@ export class StartScreen {
                 if (response.ok) {
                     const data = await response.json();
                     map.mapData = data;
+
+                    // Treat manifest counts as optional metadata.
+                    // When we have the real JSON, derive counts from it so UI always matches gameplay.
+                    map.bushCount = Array.isArray(data.bushes) ? data.bushes.length : (map.bushCount || 0);
+                    map.obstacleCount = Array.isArray(data.obstacles) ? data.obstacles.length : (map.obstacleCount || 0);
+                    map.waterCount = Array.isArray(data.waterAreas) ? data.waterAreas.length : (map.waterCount || 0);
+
                     console.log(`Loaded map data for ${map.name}`);
                 } else {
                     console.warn(`Could not load map data for ${map.name}`);
@@ -388,6 +395,22 @@ export class StartScreen {
         });
         
         await Promise.all(loadPromises);
+    }
+
+    getMapCounts(map) {
+        if (map && map.mapData) {
+            return {
+                bushes: Array.isArray(map.mapData.bushes) ? map.mapData.bushes.length : 0,
+                obstacles: Array.isArray(map.mapData.obstacles) ? map.mapData.obstacles.length : 0,
+                waterAreas: Array.isArray(map.mapData.waterAreas) ? map.mapData.waterAreas.length : 0
+            };
+        }
+
+        return {
+            bushes: map?.bushCount || 0,
+            obstacles: map?.obstacleCount || 0,
+            waterAreas: map?.waterCount || 0
+        };
     }
     
     setupEventListeners() {
@@ -1263,14 +1286,15 @@ export class StartScreen {
         ctx.fillText(map.name, x + this.mapCardWidth / 2, y + 150);
         
         // Stats
+        const counts = this.getMapCounts(map);
         ctx.font = '12px Arial';
         ctx.fillStyle = '#aaaaaa';
         ctx.textAlign = 'left';
         const statsX = x + 10;
         ctx.fillText(`Radius: ${map.radius}m`, statsX, y + 170);
-        ctx.fillText(`Bushes: ${map.bushCount || 0}`, statsX, y + 185);
-        ctx.fillText(`Rocks: ${map.obstacleCount || 0}`, statsX + 80, y + 185);
-        ctx.fillText(`Water: ${map.waterCount || 0}`, statsX, y + 200);
+        ctx.fillText(`Bushes: ${counts.bushes}`, statsX, y + 185);
+        ctx.fillText(`Rocks: ${counts.obstacles}`, statsX + 80, y + 185);
+        ctx.fillText(`Water: ${counts.waterAreas}`, statsX, y + 200);
     }
     
     drawMapPreview(map, x, y, width, height) {
@@ -1397,12 +1421,14 @@ export class StartScreen {
     
     drawSimplifiedIndicators(map, centerX, centerY, scale) {
         const ctx = this.ctx;
+
+        const counts = this.getMapCounts(map);
         
         // Simplified indicators (fallback when map data not available)
-        if (map.waterCount > 0) {
+        if (counts.waterAreas > 0) {
             ctx.fillStyle = 'rgba(59, 130, 246, 0.6)';
             const waterRadius = 6;
-            for (let i = 0; i < Math.min(map.waterCount, 5); i++) {
+            for (let i = 0; i < Math.min(counts.waterAreas, 5); i++) {
                 const angle = (Math.PI * 2 * i) / 5;
                 const wx = centerX + Math.cos(angle) * (map.radius * scale * 0.5);
                 const wy = centerY + Math.sin(angle) * (map.radius * scale * 0.5);
@@ -1412,10 +1438,10 @@ export class StartScreen {
             }
         }
         
-        if (map.obstacleCount > 0) {
+        if (counts.obstacles > 0) {
             ctx.fillStyle = 'rgba(120, 113, 108, 0.8)';
             const obstacleSize = 5;
-            for (let i = 0; i < Math.min(map.obstacleCount, 8); i++) {
+            for (let i = 0; i < Math.min(counts.obstacles, 8); i++) {
                 const angle = (Math.PI * 2 * i) / 8 + Math.PI / 8;
                 const ox = centerX + Math.cos(angle) * (map.radius * scale * 0.3);
                 const oy = centerY + Math.sin(angle) * (map.radius * scale * 0.3);
@@ -1423,10 +1449,10 @@ export class StartScreen {
             }
         }
         
-        if (map.bushCount > 0) {
+        if (counts.bushes > 0) {
             ctx.fillStyle = 'rgba(34, 197, 94, 0.6)';
             const bushRadius = 3;
-            for (let i = 0; i < Math.min(map.bushCount, 12); i++) {
+            for (let i = 0; i < Math.min(counts.bushes, 12); i++) {
                 const angle = (Math.PI * 2 * i) / 12;
                 const bx = centerX + Math.cos(angle) * (map.radius * scale * 0.7);
                 const by = centerY + Math.sin(angle) * (map.radius * scale * 0.7);

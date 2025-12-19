@@ -2,7 +2,7 @@
   "name": "Island Map",
   "radius": 1400,
   "background": {
-    "type": "image",
+    "type": "image", 
     "value": "testmap_bg.png"
   },
   "bushes": [

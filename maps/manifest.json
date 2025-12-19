@@ -4,9 +4,6 @@
       "file": "island.json",
       "name": "Island Map",
       "radius": 1400,
-      "bushCount": 85,
-      "obstacleCount": 38,
-      "waterCount": 10,
       "background": {
         "type": "image",
         "value": "testmap_bg.png"
@@ -16,9 +13,6 @@
       "file": "winterfell.json",
       "name": "Winterfell",
       "radius": 1400,
-      "bushCount": 110,
-      "obstacleCount": 172,
-      "waterCount": 11,
       "background": {
         "type": "image",
         "value": "winterfell.png"
@@ -28,9 +22,6 @@
       "file": "facey.json",
       "name": "Facey Map",
       "radius": 1400,
-      "bushCount": 72,
-      "obstacleCount": 67,
-      "waterCount": 10,
       "background": {
         "type": "color",
         "value": "#2d3748"

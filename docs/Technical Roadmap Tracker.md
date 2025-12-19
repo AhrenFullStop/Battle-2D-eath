@@ -225,19 +225,19 @@ Milestone Completion Notes (fill in when done):
 ## Milestone 3 — GitHub Pages asset correctness (P1)
 Goal: Maps and backgrounds behave identically on localhost and GitHub Pages.
 
-- [ ] Reproduce and diagnose Island background failing on GH Pages
+- [x] Reproduce and diagnose Island background failing on GH Pages
   - User story: As a dev, I can explain why it fails and verify the fix.
   - Acceptance:
     - Root cause is documented (base path / casing / caching / mime / etc.).
     - Fix validated on GH Pages.
 
-- [ ] Introduce a single “asset URL resolver” helper
+- [x] Introduce a single “asset URL resolver” helper
   - User story: As the codebase, we don’t scatter path logic across renderers.
   - Acceptance:
     - One helper builds URLs for `assets/*` and `maps/*`.
     - Both StartScreen previews and in-game MapRenderer use it.
 
-- [ ] Add a small “asset health check” in dev logs
+- [x] Add a small “asset health check” in dev logs
   - User story: As a dev, I can quickly see missing files and broken URLs.
   - Acceptance:
     - Logs clear warnings when a referenced map background can’t be fetched.
@@ -245,8 +245,21 @@ Goal: Maps and backgrounds behave identically on localhost and GitHub Pages.
 
 Milestone Completion Notes (fill in when done):
 - Summary:
+  - Root cause on GitHub Pages: case-sensitive path mismatches in `maps/manifest.json` (e.g. `Island.json` vs `island.json`) caused map JSON/background fetches to 404, triggering the default procedural fallback (so obstacles/bushes/water looked “default” and image backgrounds never loaded).
+  - Added a single URL resolver that builds correct URLs relative to `document.baseURI` (works for GH Pages project subpaths) and re-used it for map JSON, map backgrounds, and general `assets/*` images.
+  - Added a debug-only asset health check that warns on failed fetch/image loads (enabled on localhost or when `localStorage.debugAssets = '1'`).
 - Files touched:
+  - [maps/manifest.json](../maps/manifest.json)
+  - [src/utils/assetUrl.js](../src/utils/assetUrl.js)
+  - [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
+  - [src/renderer/MapRenderer.js](../src/renderer/MapRenderer.js)
+  - [src/main.js](../src/main.js)
+  - [src/core/AssetLoader.js](../src/core/AssetLoader.js)
+  - [src/editor/EditorUI.js](../src/editor/EditorUI.js)
+  - [src/editor/MapEditor.js](../src/editor/MapEditor.js)
 - Key decisions:
+  - Use `new URL(relativePath, document.baseURI)` to avoid scattering base-path logic and to stay static-site compatible.
+  - Treat `bushCount/obstacleCount/waterCount` in the manifest as optional metadata only; StartScreen derives counts from loaded map JSON whenever available.
 
 ## Milestone 4 — AI: believable, varied, and performant (P0/P1)
 Goal: Bots become the fun engine: more opponents, fewer dumb moments, varied skill, and abilities.
