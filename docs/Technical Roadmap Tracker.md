@@ -441,13 +441,11 @@ Milestone Completion Notes (fill in when done):
 
 
 (ignore) Notes:
-- If a few (2+) bots sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
-- refactor manifest to remove bushcount etc.
-- map editor doesn't load images from directory, instead from manifest. this is dumb
-- ensure weapons don't spawn on rocks
-- consider swapping out rocks and trees for png's (maybe some color tweaks allowed)
-- Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
-- left align the came over stats
-- add a slight bounce from rocks to make them easier to navigate around
-- add a favicon
-- change deployment to automatically add a version counter. Display version on bottom of 
+- Weapon Pickup: If a few (2+) bots sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
+- Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
+- Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
+- Spawning: Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
+- Game Over Screen: left align the came over stats
+- Bots and Gameplay: add a slight bounce from rocks to make them easier to navigate around, this will improve bot path finding too.
+- Basics: add a favicon
+- CI/CD: Change deployment to automatically add a version counter. Display version on bottom of 
