@@ -16,9 +16,9 @@
       "file": "Winterfell.json",
       "name": "Winterfell",
       "radius": 1400,
-      "bushCount": 0,
-      "obstacleCount": 0,
-      "waterCount": 0,
+      "bushCount": 110,
+      "obstacleCount": 172,
+      "waterCount": 11,
       "background": {
         "type": "image",
         "value": "winterfell.png"
