@@ -28,9 +28,6 @@ Build an open source, offline, peer-to-peer (P2P) battle royale that is simple, 
 - Map editor exists as a separate entrypoint (editor.html).
 
 ### Known problems (confirmed in code)
-- ~~**No “play again” flow (critical):** end screen tells players to refresh the page.~~
-  - Fixed (Milestone 0): end screen now has “Return to Menu” and a clean reset lifecycle.
-  - See: UI end screen button + hit-test in [src/renderer/UIRenderer.js](../src/renderer/UIRenderer.js) and reset lifecycle in [src/main.js](../src/main.js)
 - **Weapon pickup “infinite loader” when pickup is invalid:** player pickup loop resets progress on failure.
   - Root: on pickup completion, if `player.tryPickupWeapon(...)` returns false, pickup progress is reset and can immediately restart.
   - See: player pickup loop in [src/main.js](../src/main.js)
