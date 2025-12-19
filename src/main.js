@@ -24,6 +24,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config/constants.js';
 import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig, getGameConfig } from './config/map.js';
 import { generateAISkills, generateAICharacterTypes, generateWeaponTier } from './config/gameConfig.js';
 import { Vector2D } from './utils/Vector2D.js';
+import { resolveMapsUrl, warnMissingAsset } from './utils/assetUrl.js';
 
 class Game {
     constructor() {
@@ -104,9 +105,11 @@ class Game {
         } else if (this.selectedMap && this.selectedMap.file) {
             try {
                 const mapPath = `maps/${this.selectedMap.file}`;
-                console.log('Fetching map file:', mapPath);
-                const response = await fetch(mapPath);
+                const mapUrl = resolveMapsUrl(this.selectedMap.file);
+                console.log('Fetching map file:', mapUrl);
+                const response = await fetch(mapUrl);
                 if (!response.ok) {
+                    warnMissingAsset('map json', mapPath, `HTTP ${response.status}`);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const mapData = await response.json();
@@ -115,6 +118,7 @@ class Game {
                 console.log('✅ Successfully loaded custom map:', mapData.name);
             } catch (error) {
                 console.error('❌ Error loading map file:', error);
+                warnMissingAsset('map json', `maps/${this.selectedMap.file}`, error?.message || String(error));
                 console.log('Falling back to default procedural map');
             }
         } else {

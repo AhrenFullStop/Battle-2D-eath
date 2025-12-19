@@ -1,6 +1,7 @@
 // Start screen with character selection and map selection
 
 import { CHARACTERS } from '../config/characters.js';
+import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -278,7 +279,8 @@ export class StartScreen {
     
     async loadMapsFromManifest() {
         try {
-            const response = await fetch('maps/manifest.json');
+            const manifestUrl = resolveMapsUrl('manifest.json');
+            const response = await fetch(manifestUrl);
             if (!response.ok) {
                 throw new Error(`Failed to load manifest: ${response.status}`);
             }
@@ -299,6 +301,7 @@ export class StartScreen {
             this.mapsLoaded = true;
             console.log('Loaded maps from manifest:', this.availableMaps.length, 'maps');
         } catch (error) {
+            warnMissingAsset('map manifest', 'maps/manifest.json', error?.message || String(error));
             console.error('Error loading maps manifest:', error);
             // Fallback to default map if manifest fails
             this.availableMaps = [{
@@ -325,7 +328,7 @@ export class StartScreen {
                 if (map?.background?.type !== 'image') continue;
                 const filename = map?.background?.value;
                 if (!filename) continue;
-                const imagePath = `maps/backgrounds/${filename}`;
+                const imagePath = resolveMapBackgroundUrl(filename);
                 this.ensureMapPreviewImage(imagePath);
             }
         } catch (e) {
@@ -355,6 +358,7 @@ export class StartScreen {
         };
         img.onerror = () => {
             entry.status = 'error';
+            warnMissingAsset('map preview background image', imagePath, 'StartScreen preview');
         };
         img.src = imagePath;
 
@@ -365,17 +369,20 @@ export class StartScreen {
         // Load actual map data for each map for accurate previews
         const loadPromises = this.availableMaps.map(async (map) => {
             try {
-                const response = await fetch(`maps/${map.file}`);
+                const mapUrl = resolveMapsUrl(map.file);
+                const response = await fetch(mapUrl);
                 if (response.ok) {
                     const data = await response.json();
                     map.mapData = data;
                     console.log(`Loaded map data for ${map.name}`);
                 } else {
                     console.warn(`Could not load map data for ${map.name}`);
+                    warnMissingAsset('map json', `maps/${map.file}`, `HTTP ${response.status}`);
                     map.mapData = null;
                 }
             } catch (error) {
                 console.warn(`Error loading map data for ${map.name}:`, error);
+                warnMissingAsset('map json', `maps/${map.file}`, error?.message || String(error));
                 map.mapData = null;
             }
         });
@@ -1287,7 +1294,7 @@ export class StartScreen {
         // Draw the map background INSIDE the circle (true preview)
         if (map.background?.type === 'image') {
             const filename = map?.background?.value;
-            const imagePath = filename ? `maps/backgrounds/${filename}` : null;
+            const imagePath = filename ? resolveMapBackgroundUrl(filename) : null;
             const entry = imagePath ? this.ensureMapPreviewImage(imagePath) : null;
 
             if (entry && entry.status === 'loaded' && entry.img) {

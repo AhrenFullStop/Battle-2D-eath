@@ -1,6 +1,7 @@
 // Map renderer for Battle-2D-eath Phase 5
 
 import { getCurrentMapConfig } from '../config/map.js';
+import { resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
 
 export class MapRenderer {
     constructor(ctx, assetLoader = null) {
@@ -17,7 +18,7 @@ export class MapRenderer {
         
         // Check if map has background image
         if (mapConfig.background && mapConfig.background.type === 'image') {
-            const imagePath = `maps/backgrounds/${mapConfig.background.value}`;
+            const imagePath = resolveMapBackgroundUrl(mapConfig.background.value);
             
             // Only load if it's a different image
             if (this.lastBackgroundPath !== imagePath) {
@@ -30,6 +31,7 @@ export class MapRenderer {
                 };
                 this.backgroundImage.onerror = () => {
                     console.error('Failed to load background image:', imagePath);
+                    warnMissingAsset('map background image', imagePath, 'MapRenderer');
                     this.backgroundImageLoaded = false;
                     this.backgroundImage = null;
                 };

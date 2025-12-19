@@ -1,6 +1,7 @@
 // Editor UI - Handles rendering and UI for the map editor
 
 import { getDefaultGameConfig } from '../config/gameConfig.js';
+import { resolveMapsUrl, warnMissingAsset } from '../utils/assetUrl.js';
 
 export class EditorUI {
     constructor(canvas, ctx, editor, camera) {
@@ -63,7 +64,7 @@ export class EditorUI {
     
     async loadBackgroundImages() {
         try {
-            const response = await fetch('maps/manifest.json');
+            const response = await fetch(resolveMapsUrl('manifest.json'));
             const manifest = await response.json();
             
             // Extract unique background images from maps
@@ -88,6 +89,7 @@ export class EditorUI {
             console.log('Loaded background images:', this.backgroundImages);
         } catch (error) {
             console.error('Error loading background images from manifest:', error);
+            warnMissingAsset('map manifest', 'maps/manifest.json', error?.message || String(error));
             this.backgroundImages = [];
         }
     }

@@ -1,5 +1,7 @@
 // Asset loader for images and future audio files
 
+import { resolveAssetUrl, warnMissingAsset } from '../utils/assetUrl.js';
+
 export class AssetLoader {
     constructor() {
         this.images = new Map();
@@ -26,6 +28,7 @@ export class AssetLoader {
             };
             
             img.onerror = () => {
+                warnMissingAsset('image', path, `key=${key}`);
                 if (silent) {
                     // Silent failure - asset is optional
                     this.loadedCount++;
@@ -34,8 +37,8 @@ export class AssetLoader {
                     reject(new Error(`Failed to load image: ${path}`));
                 }
             };
-            
-            img.src = path;
+
+            img.src = resolveAssetUrl(path);
         });
     }
 

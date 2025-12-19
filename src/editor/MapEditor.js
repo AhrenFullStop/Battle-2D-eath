@@ -2,6 +2,7 @@
 
 import { Vector2D } from '../utils/Vector2D.js';
 import { getDefaultGameConfig } from '../config/gameConfig.js';
+import { resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
 
 export class MapEditor {
     constructor() {
@@ -56,7 +57,7 @@ export class MapEditor {
     loadBackgroundImage() {
         // Only load if background is an image type
         if (this.mapData.background?.type === 'image') {
-            const imagePath = `maps/backgrounds/${this.mapData.background.value}`;
+            const imagePath = resolveMapBackgroundUrl(this.mapData.background.value);
             
             // Only load if it's a different image
             if (this.lastBackgroundPath !== imagePath) {
@@ -69,6 +70,7 @@ export class MapEditor {
                 };
                 this.backgroundImage.onerror = () => {
                     console.error('Failed to load editor background image:', imagePath);
+                    warnMissingAsset('map editor background image', imagePath, 'MapEditor');
                     this.backgroundImageLoaded = false;
                     this.backgroundImage = null;
                 };
