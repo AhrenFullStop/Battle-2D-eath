@@ -25,6 +25,11 @@ export class AISystem {
         
         // Listen for character death events
         this.eventBus.on('characterDamaged', (data) => this.onCharacterDamaged(data));
+
+        // Reusable scratch vectors to avoid allocations in hot loops
+        this._scratchVector1 = new Vector2D(0, 0);
+        this._scratchVector2 = new Vector2D(0, 0);
+        this._scratchVector3 = new Vector2D(0, 0);
     }
     
     // Update all AI characters
@@ -278,10 +283,11 @@ export class AISystem {
         }
         
         // Move towards target item
-        const direction = new Vector2D(
+        this._scratchVector1.set(
             targetItem.position.x - ai.position.x,
             targetItem.position.y - ai.position.y
         );
+        const direction = this._scratchVector1;
         
         const distance = direction.magnitude();
         
@@ -375,10 +381,11 @@ export class AISystem {
                     unstuckAngle = ai.velocity.angle() + Math.PI / 2 + perpOffset;
                 }
                 
-                ai.unstuckDirection = new Vector2D(
+                this._scratchVector1.set(
                     Math.cos(unstuckAngle),
                     Math.sin(unstuckAngle)
                 );
+                ai.unstuckDirection = this._scratchVector1.clone(); // Clone here as we need to store it
                 
                 console.log(`AI ${ai.name} is stuck (attempt ${ai.unstuckAttempts}), trying to unstuck at angle ${(unstuckAngle * 180 / Math.PI).toFixed(0)}°`);
             }
@@ -417,10 +424,11 @@ export class AISystem {
         
         // Move towards enemy if too far
         if (distanceToEnemy > ai.combatRange * 0.7) {
-            let direction = new Vector2D(
+            this._scratchVector1.set(
                 ai.targetEnemy.position.x - ai.position.x,
                 ai.targetEnemy.position.y - ai.position.y
             );
+            const direction = this._scratchVector1;
             direction.normalize();
             
             // Add unstuck vector if AI is stuck (more aggressive)
@@ -438,10 +446,11 @@ export class AISystem {
         }
         // Keep distance if too close
         else if (distanceToEnemy < ai.combatRange * 0.4) {
-            const direction = new Vector2D(
+            this._scratchVector1.set(
                 ai.position.x - ai.targetEnemy.position.x,
                 ai.position.y - ai.targetEnemy.position.y
             );
+            const direction = this._scratchVector1;
             direction.normalize();
 
             // Lightweight local avoidance to reduce obstacle buzzing
@@ -457,10 +466,11 @@ export class AISystem {
         // Stay in optimal range and strafe
         else {
             // Strafe movement
-            const perpendicular = new Vector2D(
+            this._scratchVector2.set(
                 ai.targetEnemy.position.y - ai.position.y,
                 -(ai.targetEnemy.position.x - ai.position.x)
             );
+            const perpendicular = this._scratchVector2;
             perpendicular.normalize();
 
             // Prefer a consistent strafe side per bot (reduces hive-mind feel)
@@ -501,10 +511,11 @@ export class AISystem {
         const safeZoneInfo = this.gameState.safeZoneSystem.getSafeZoneInfo();
         
         // Calculate direction to safe zone center (move to center, not just to edge)
-        const directionToCenter = new Vector2D(
+        this._scratchVector1.set(
             safeZoneInfo.centerX - ai.position.x,
             safeZoneInfo.centerY - ai.position.y
         );
+        const directionToCenter = this._scratchVector1;
         
         const distanceToCenter = directionToCenter.magnitude();
         
@@ -552,10 +563,11 @@ export class AISystem {
         }
         
         // Run away from enemy
-        let fleeDirection = new Vector2D(
+        this._scratchVector1.set(
             ai.position.x - ai.targetEnemy.position.x,
             ai.position.y - ai.targetEnemy.position.y
         );
+        let fleeDirection = this._scratchVector1;
         
         // Check if near boundary and adjust flee direction
         const avoidDirection = this.getAvoidBoundaryDirection(ai);
@@ -569,10 +581,11 @@ export class AISystem {
             const isOutside = this.gameState.safeZoneSystem.isOutsideZone(ai.position.x, ai.position.y);
             if (isOutside) {
                 const safeZoneInfo = this.gameState.safeZoneSystem.getSafeZoneInfo();
-                const toSafeZone = new Vector2D(
+                this._scratchVector2.set(
                     safeZoneInfo.centerX - ai.position.x,
                     safeZoneInfo.centerY - ai.position.y
                 );
+                const toSafeZone = this._scratchVector2;
                 toSafeZone.normalize();
                 // Blend flee with moving to safe zone
                 fleeDirection.add(toSafeZone.multiply(1.5));
@@ -1007,7 +1020,8 @@ export class AISystem {
         // Check if close to boundary
         if (distanceFromCenter > MAP_CONFIG.radius - checkDistance) {
             // Push towards center
-            const avoidDirection = new Vector2D(-dx, -dy);
+            this._scratchVector3.set(-dx, -dy);
+            const avoidDirection = this._scratchVector3;
             avoidDirection.normalize();
             return avoidDirection;
         }

@@ -160,19 +160,27 @@ export class Character extends Entity {
         if (this.weapons.length >= this.maxWeapons) {
             // First, check if we have the same weapon type with lower tier
             const sameTypeIndex = this.findSameWeaponTypeIndex(weapon.weaponType);
-            
+
             if (sameTypeIndex !== -1) {
                 // Replace same type if new weapon is higher tier
                 if (weapon.tier > this.weapons[sameTypeIndex].tier) {
+                    // Clean up burst state on old weapon
+                    if (this.weapons[sameTypeIndex].burstState) {
+                        delete this.weapons[sameTypeIndex].burstState;
+                    }
                     this.weapons[sameTypeIndex] = weapon;
                     return true;
                 } else {
                     return false; // Can't replace with lower or same tier
                 }
             }
-            
+
             // Otherwise, replace lowest tier weapon
             const lowestTierIndex = this.findLowestTierWeaponIndex();
+            // Clean up burst state on old weapon
+            if (this.weapons[lowestTierIndex].burstState) {
+                delete this.weapons[lowestTierIndex].burstState;
+            }
             this.weapons[lowestTierIndex] = weapon;
             
             // Keep active weapon index valid

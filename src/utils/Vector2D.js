@@ -18,6 +18,13 @@ export class Vector2D {
         return this;
     }
 
+    // Copy values from another vector
+    copy(other) {
+        this.x = other.x;
+        this.y = other.y;
+        return this;
+    }
+
     // Add another vector to this one
     add(vector) {
         this.x += vector.x;

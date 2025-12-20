@@ -11,11 +11,14 @@ export class CombatSystem {
         this.eventBus = eventBus;
 
         this.disposed = false;
-        
+
         // Track active effects and projectiles
         this.weaponEffects = [];
         this.projectiles = [];
         this.damageNumbers = [];
+
+        // Tick-based timing for deterministic multiplayer
+        this.currentTick = 0;
     }
     
     // Update combat system
@@ -50,7 +53,34 @@ export class CombatSystem {
             number.update(deltaTime);
             return number.active;
         });
-        
+
+        // Increment tick counter for deterministic timing
+        this.currentTick++;
+
+        // Process active burst attacks
+        this.gameState.characters.forEach(character => {
+            if (!character.weapons || character.weapons.length === 0) return;
+
+            character.weapons.forEach(weapon => {
+                if (!weapon.burstState) return;
+
+                const burst = weapon.burstState;
+
+                // Check if it's time to fire next shot
+                if (burst.shotsRemaining > 0 && this.currentTick >= burst.nextShotTick) {
+                    this.fireBurstShot(burst);
+                    burst.shotsRemaining--;
+
+                    if (burst.shotsRemaining > 0) {
+                        burst.nextShotTick = this.currentTick + burst.ticksPerShot;
+                    } else {
+                        // Burst complete, clean up state
+                        delete weapon.burstState;
+                    }
+                }
+            });
+        });
+
         // Update weapon cooldowns for all characters
         this.gameState.characters.forEach(character => {
             if (character.weapons && character.weapons.length > 0) {
@@ -91,7 +121,7 @@ export class CombatSystem {
                 this.handleAoeAttack(attackData);
                 break;
             case 'burst':
-                this.handleBurstAttack(attackData);
+                this.handleBurstAttack(attackData, weapon, this.currentTick);
                 break;
         }
         
@@ -177,21 +207,36 @@ export class CombatSystem {
     }
     
     // Handle burst attack (Gun)
-    handleBurstAttack(attackData) {
-        // Fire multiple projectiles with slight delay
+    handleBurstAttack(attackData, weapon, currentTick) {
         const burstCount = attackData.burstCount || 3;
-        const burstDelay = attackData.burstDelay || 100;
-        
-        for (let i = 0; i < burstCount; i++) {
-            setTimeout(() => {
-                if (this.disposed) return;
-                const projectile = new Projectile(attackData);
-                // Add slight spread to burst
-                const spread = (Math.random() - 0.5) * 0.1;
-                projectile.velocity.rotate(spread);
-                this.projectiles.push(projectile);
-            }, i * burstDelay);
-        }
+        const burstDelayMs = attackData.burstDelay || 100;
+
+        // Convert ms delay to ticks (assume 60 FPS = ~16.67ms per tick)
+        const ticksPerShot = Math.ceil(burstDelayMs / 16.67);
+
+        // Initialize burst state on the weapon
+        weapon.burstState = {
+            shotsRemaining: burstCount,
+            nextShotTick: currentTick,
+            attackData: attackData,
+            ticksPerShot: ticksPerShot
+        };
+
+        // Fire first shot immediately
+        this.fireBurstShot(weapon.burstState);
+        weapon.burstState.shotsRemaining--;
+        weapon.burstState.nextShotTick = currentTick + ticksPerShot;
+    }
+
+    // Fire a single burst shot
+    fireBurstShot(burstState) {
+        if (this.disposed) return;
+
+        const projectile = new Projectile(burstState.attackData);
+        // Add slight spread to burst
+        const spread = (Math.random() - 0.5) * 0.1;
+        projectile.velocity.rotate(spread);
+        this.projectiles.push(projectile);
     }
     
     // Check if projectile hits an obstacle
@@ -279,6 +324,11 @@ export class CombatSystem {
         });
 
         if (killedNow) {
+            // Clean up burst state on death
+            if (target.weapon && target.weapon.burstState) {
+                delete target.weapon.burstState;
+            }
+
             this.eventBus.emit('characterKilled', {
                 target: target,
                 attacker: attacker,

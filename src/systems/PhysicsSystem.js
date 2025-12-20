@@ -8,6 +8,8 @@ import { circleRectCollision } from '../utils/collision.js';
 export class PhysicsSystem {
     constructor(gameState) {
         this.gameState = gameState;
+        // Reusable scratch vector for input processing
+        this._inputScratch = new Vector2D(0, 0);
     }
 
     // Update all physics (called each frame)
@@ -74,7 +76,8 @@ export class PhysicsSystem {
         
         // If there's input, set velocity based on input direction and move speed
         if (input.x !== 0 || input.y !== 0) {
-            const inputVector = new Vector2D(input.x, input.y);
+            this._inputScratch.set(input.x, input.y);
+            const inputVector = this._inputScratch;
             
             // Normalize and scale by move speed
             const magnitude = inputVector.magnitude();

@@ -1,33 +1,16 @@
-// Main application entry point - Battle-2D-eath Phase 7: Polish
+// Main application entry point - Battle-2D-eath Phase 11: Architecture Refactor
 
 import { GameLoop } from './core/GameLoop.js';
 import { GameState } from './core/GameState.js';
-import { EventBus } from './core/EventBus.js';
 import { AssetLoader } from './core/AssetLoader.js';
-import { InputSystem } from './systems/InputSystem.js';
-import { PhysicsSystem } from './systems/PhysicsSystem.js';
-import { CombatSystem } from './systems/CombatSystem.js';
-import { AISystem } from './systems/AISystem.js';
-import { SafeZoneSystem } from './systems/SafeZoneSystem.js';
-import { CameraSystem } from './systems/CameraSystem.js';
-import { AbilitySystem } from './systems/AbilitySystem.js';
-import { Renderer } from './renderer/Renderer.js';
 import { StartScreen } from './renderer/StartScreen.js';
-import { Player } from './entities/Player.js';
-import { AICharacter } from './entities/AICharacter.js';
-import { Weapon } from './entities/Weapon.js';
-import { Consumable } from './entities/Consumable.js';
-import { CHARACTERS } from './config/characters.js';
-import { createWeapon } from './config/weapons.js';
-import { createConsumable } from './config/consumables.js';
+import { MatchInitializer } from './core/MatchInitializer.js';
+import { GameOrchestrator } from './core/GameOrchestrator.js';
+import { MultiplayerMatchController } from './core/MultiplayerMatchController.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config/constants.js';
-import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig, getGameConfig } from './config/map.js';
-import { generateAISkills, generateAICharacterTypes, generateWeaponTier } from './config/gameConfig.js';
-import { Vector2D } from './utils/Vector2D.js';
+import { loadMapFromJSON } from './config/map.js';
 import { resolveMapsUrl, warnMissingAsset } from './utils/assetUrl.js';
-import { loadProfile, saveProfile, computeMatchRewards, recordMatchToProfile, getMaxHpMultiplierFromUpgrades } from './core/ProfileStore.js';
-import { createMulberry32 } from './net/prng.js';
-import { LockstepSession2P } from './net/LockstepSession2P.js';
+import { loadProfile } from './core/ProfileStore.js';
 import { getCanvasCoordinates } from './utils/canvasHelpers.js';
 
 class Game {
@@ -37,63 +20,51 @@ class Game {
         if (!this.canvas) {
             throw new Error('Canvas element not found');
         }
-        
+
         // Set canvas dimensions
         this.canvas.width = CANVAS_WIDTH;
         this.canvas.height = CANVAS_HEIGHT;
-        
+
         // Get 2D context
         this.ctx = this.canvas.getContext('2d');
-        
+
         // Game phase
         this.phase = 'start'; // 'start', 'playing', 'ended'
         this.selectedCharacter = null;
         this.selectedMap = null;
-        
+
         // Initialize AssetLoader early for start screen
         this.assetLoader = new AssetLoader();
-        
+
         // Start screen with asset loader
         this.startScreen = new StartScreen(this.canvas, this.ctx, this.assetLoader);
-        
-        // Initialize core systems (will be set up after character selection)
-        this.gameState = null;
-        this.eventBus = null;
-        
-        // Game systems (initialized after character selection)
-        this.inputSystem = null;
-        this.physicsSystem = null;
-        this.combatSystem = null;
-        this.safeZoneSystem = null;
-        this.aiSystem = null;
-        this.abilitySystem = null;
-        this.cameraSystem = null;
-        this.renderer = null;
+
+        // Initialize core systems
+        this.gameState = new GameState();
+
+        // Match controllers
+        this.matchInitializer = null;
+        this.gameOrchestrator = null;
+        this.multiplayerController = null;
+
+        // Game loop
         this.gameLoop = null;
-        this.consumables = [];
-        
+        this.startScreenLoop = null;
+
         // Setup window resize handler
         window.addEventListener('resize', () => this.onResize());
-        // Initial resize will be called after systems are initialized
 
         // End screen interaction (single handler; avoids duplicate listeners across resets)
         this.onEndScreenTouchEndBound = (e) => this.handleEndScreenTouchEnd(e);
         this.onEndScreenMouseUpBound = (e) => this.handleEndScreenMouseUp(e);
         this.canvas.addEventListener('touchend', this.onEndScreenTouchEndBound, { passive: false });
         this.canvas.addEventListener('mouseup', this.onEndScreenMouseUpBound);
-        
+
         // Setup start screen interaction
         this.setupStartScreenInteraction();
 
         // Meta progression
         this.profile = loadProfile();
-        this.rewardsAwarded = false;
-
-        // Match mode
-        this.matchMode = 'solo'; // 'solo' | 'multiplayer'
-        this.mpSession = null;
-        this.mpLockstep = null;
-        this.mpPlayers = null; // { local: Player, remote: Player }
     }
     
     setupStartScreenInteraction() {
@@ -101,26 +72,23 @@ class Game {
         // We'll check the startRequested flag in the render loop
     }
     
-    async startGame() {
-        this.matchMode = 'solo';
-        console.log('Starting game with character:', this.selectedCharacter);
-        console.log('Starting game with map:', this.selectedMap?.name || 'Random Arena');
-        
-        // Load selected map.
-        // NOTE: StartScreen preloads map JSON into `selectedMap.mapData` and applies menu overrides
-        // into `mapData.gameConfig`. Prefer that to avoid discarding overrides.
-        if (this.selectedMap && this.selectedMap.mapData) {
+    async startSoloMatch(playerCharacterType, selectedMap) {
+        console.log('Starting solo match with character:', playerCharacterType);
+        console.log('Starting solo match with map:', selectedMap?.name || 'Random Arena');
+
+        // Load selected map
+        if (selectedMap && selectedMap.mapData) {
             try {
-                loadMapFromJSON(this.selectedMap.mapData);
-                console.log('✅ Successfully loaded selected map (with menu overrides):', this.selectedMap.mapData.name);
+                loadMapFromJSON(selectedMap.mapData);
+                console.log('✅ Successfully loaded selected map (with menu overrides):', selectedMap.mapData.name);
             } catch (error) {
                 console.error('❌ Error loading selected map data:', error);
                 console.log('Falling back to default procedural map');
             }
-        } else if (this.selectedMap && this.selectedMap.file) {
+        } else if (selectedMap && selectedMap.file) {
             try {
-                const mapPath = `maps/${this.selectedMap.file}`;
-                const mapUrl = resolveMapsUrl(this.selectedMap.file);
+                const mapPath = `maps/${selectedMap.file}`;
+                const mapUrl = resolveMapsUrl(selectedMap.file);
                 console.log('Fetching map file:', mapUrl);
                 const response = await fetch(mapUrl);
                 if (!response.ok) {
@@ -133,69 +101,44 @@ class Game {
                 console.log('✅ Successfully loaded custom map:', mapData.name);
             } catch (error) {
                 console.error('❌ Error loading map file:', error);
-                warnMissingAsset('map json', `maps/${this.selectedMap.file}`, error?.message || String(error));
+                warnMissingAsset('map json', `maps/${selectedMap.file}`, error?.message || String(error));
                 console.log('Falling back to default procedural map');
             }
         } else {
             console.log('Using default procedural map (no custom map selected)');
         }
-        
+
         // Remove start screen event listeners
         this.startScreen.removeEventListeners();
-        
-        // Initialize core systems
-        this.gameState = new GameState();
-        this.eventBus = new EventBus();
-        
-        // AssetLoader already created in constructor, just ensure assets are loaded
+
+        // Ensure assets are loaded
         if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
             console.log('Loading game assets...');
             await this.assetLoader.loadGameAssets();
             console.log('Game assets loaded');
         }
-        
-        // Store consumables array in game state for AI drops
-        this.gameState.consumables = this.consumables;
-        
-        // Initialize game systems
-        this.inputSystem = new InputSystem(this.canvas, this.eventBus, this.assetLoader);
-        this.physicsSystem = new PhysicsSystem(this.gameState);
-        this.combatSystem = new CombatSystem(this.gameState, this.eventBus);
-        this.safeZoneSystem = new SafeZoneSystem(this.gameState, this.eventBus);
-        this.abilitySystem = new AbilitySystem(this.gameState, this.eventBus, this.combatSystem);
-        this.aiSystem = new AISystem(this.gameState, this.eventBus, this.combatSystem, this.abilitySystem);
-        this.cameraSystem = new CameraSystem(CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.renderer = new Renderer(this.canvas, this.assetLoader);
-        
-        // Store safe zone system reference in game state
-        this.gameState.safeZoneSystem = this.safeZoneSystem;
-        
+
+        // Initialize match using MatchInitializer
+        this.matchInitializer = new MatchInitializer(this.canvas, this.gameState, this.assetLoader);
+        const { systems, spawnManager, playerCharacter } = await this.matchInitializer.initializeSoloMatch(playerCharacterType, selectedMap, this.profile);
+
+        // Create orchestrator
+        this.gameOrchestrator = new GameOrchestrator(this.gameState, systems, systems.renderer, spawnManager, playerCharacter, this.profile);
+
         // Initialize game loop
         this.gameLoop = new GameLoop(
             (deltaTime) => this.update(deltaTime),
             (interpolation) => this.render(interpolation)
         );
-        
-        // Setup event listeners for stats tracking
-        this.setupEventListeners();
 
-        // Reset reward guard for the new match
-        this.rewardsAwarded = false;
-        
-        // Initialize game with selected character
-        await this.init();
-        
         // Change phase and start
         this.phase = 'playing';
         this.gameLoop.start();
-        
-        console.log('Game started! Phase 7: Polish - Final MVP');
+
+        console.log('Solo match started! Phase 11: Architecture Refactor');
     }
 
-    async startMultiplayerMatch(session) {
-        this.matchMode = 'multiplayer';
-        this.mpSession = session;
-
+    async startMultiplayerMatch(session, playerCharacterType, selectedMap, isHost) {
         console.log('Starting multiplayer match:', session?.role);
 
         // Load a deterministic map file (no procedural randomness)
@@ -219,153 +162,25 @@ class Game {
         // Remove start screen listeners but KEEP the active multiplayer connection.
         this.startScreen.removeEventListeners({ preserveMultiplayerConnection: true });
 
-        // Initialize core systems
-        this.gameState = new GameState();
-        this.eventBus = new EventBus();
-
-        // Assets already loaded for menu; ensure game assets available.
+        // Ensure assets are loaded
         if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
             await this.assetLoader.loadGameAssets();
         }
 
-        // Systems (no AI / no loot)
-        this.inputSystem = new InputSystem(this.canvas, this.eventBus, this.assetLoader);
-        this.physicsSystem = new PhysicsSystem(this.gameState);
-        this.combatSystem = new CombatSystem(this.gameState, this.eventBus);
-        this.safeZoneSystem = new SafeZoneSystem(this.gameState, this.eventBus);
-        this.abilitySystem = new AbilitySystem(this.gameState, this.eventBus, this.combatSystem);
-        this.aiSystem = null;
-        this.cameraSystem = new CameraSystem(CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.renderer = new Renderer(this.canvas, this.assetLoader);
-        this.consumables = [];
+        // Initialize multiplayer match using MultiplayerMatchController
+        this.multiplayerController = new MultiplayerMatchController(this, this.canvas, this.gameState, this.assetLoader, this.profile);
+        await this.multiplayerController.startMatch(session, playerCharacterType, { mapData: selectedMap }, isHost);
 
-        this.gameState.safeZoneSystem = this.safeZoneSystem;
-
-        // Setup event listeners for stats tracking
-        this.setupEventListeners();
-        this.rewardsAwarded = false;
-
-        // Create players (Bolt vs Bolt for the MVP slice)
-        const localIsHost = session.role === 'host';
-        const localPlayerIndex = localIsHost ? 0 : 1;
-
-        // Detach lobby message handler; game owns transport now.
-        if (session.connection) {
-            session.connection.onMessage = null;
-            session.connection.onStatus = null;
-        }
-
-        this.mpLockstep = new LockstepSession2P({
-            transport: session.connection,
-            localPlayerIndex,
-            inputDelayTicks: 2
-        });
-
-        const boltConfigLocal = { ...CHARACTERS['bolt'], isPlayer: true };
-        const boltConfigRemote = { ...CHARACTERS['bolt'], isPlayer: false };
-
-        const localPlayer = new Player(boltConfigLocal);
-        const remotePlayer = new Player(boltConfigRemote);
-        remotePlayer.isRemoteHuman = true;
-
-        // Deterministic spawns
-        const mapConfig = getCurrentMapConfig();
-        const rng = createMulberry32((session.seed >>> 0) || 1);
-        const spawns = this.generateCharacterSpawns(mapConfig, 2, {
-            clearanceRadius: 70,
-            minSpacing: 520,
-            marginFromEdge: 180,
-            maxAttemptsPerSpawn: 350
-        }, rng);
-
-        // Assign spawn order by player index
-        const p0 = localIsHost ? localPlayer : remotePlayer;
-        const p1 = localIsHost ? remotePlayer : localPlayer;
-        p0.setPosition(spawns[0].x, spawns[0].y);
-        p1.setPosition(spawns[1].x, spawns[1].y);
-
-        // Fixed starting weapon (deterministic): Blaster tier 1
-        const blaster0 = new Weapon(createWeapon('blaster', 1));
-        const blaster1 = new Weapon(createWeapon('blaster', 1));
-        p0.equipWeapon(blaster0);
-        p1.equipWeapon(blaster1);
-
-        this.gameState.addCharacter(p0);
-        this.gameState.addCharacter(p1);
-
-        // Camera to local player
-        this.cameraSystem.x = localPlayer.position.x - CANVAS_WIDTH / 2;
-        this.cameraSystem.y = localPlayer.position.y - CANVAS_HEIGHT / 2;
-        this.cameraSystem.targetX = this.cameraSystem.x;
-        this.cameraSystem.targetY = this.cameraSystem.y;
-        this.gameState.camera = this.cameraSystem.getBounds();
-
-        this.mpPlayers = { local: localPlayer, remote: remotePlayer };
-
-        // Game loop
+        // Initialize game loop
         this.gameLoop = new GameLoop(
             (deltaTime) => this.update(deltaTime),
             (interpolation) => this.render(interpolation)
         );
 
         this.phase = 'playing';
-        this.mpLockstep.start();
         this.gameLoop.start();
     }
     
-    // Setup event listeners
-    setupEventListeners() {
-        // Track damage dealt by player for stats
-        this.eventBus.on('characterDamaged', (data) => {
-            if (data.attacker && data.attacker.isPlayer) {
-                this.gameState.addDamage(data.damage);
-            }
-
-            // Track damage taken by the player
-            if (data.target && data.target.isPlayer) {
-                this.gameState.addDamageTaken(data.damage);
-            }
-        });
-
-        // Track kills only when player actually gets the kill
-        this.eventBus.on('characterKilled', (data) => {
-            if (data.attacker && data.attacker.isPlayer && data.target && !data.target.isPlayer) {
-                this.gameState.addKill();
-            }
-        });
-
-        this.eventBus.on('healthKitUsed', (data) => {
-            if (data.character && data.character.isPlayer) {
-                this.gameState.addHealConsumed();
-            }
-        });
-
-        this.eventBus.on('consumablePickedUp', (data) => {
-            if (data.character && data.character.isPlayer && data.consumableType === 'shieldPotion') {
-                // Shield potions are consumed immediately on pickup.
-                this.gameState.addShieldUsed();
-            }
-        });
-
-        this.eventBus.on('abilityUsed', (data) => {
-            if (data.character && data.character.isPlayer) {
-                this.gameState.addAbilityUsed();
-            }
-        });
-
-        this.eventBus.on('weaponFired', (data) => {
-            if (data.character && data.character.isPlayer) {
-                this.gameState.addWeaponFired();
-            }
-        });
-
-        // Safe zone damage isn't emitted as characterDamaged; capture it separately.
-        this.eventBus.on('zoneDamage', (data) => {
-            if (data.character && data.character.isPlayer) {
-                this.gameState.addDamageTaken(data.damage);
-            }
-        });
-    }
 
     handleEndScreenTouchEnd(event) {
         if (!this.gameState || this.gameState.phase === 'playing') return;
@@ -383,10 +198,17 @@ class Game {
     }
 
     tryHandleReturnToMenu(x, y) {
-        if (!this.renderer || !this.renderer.uiRenderer) return;
+        let renderer = null;
+        if (this.multiplayerController && this.multiplayerController.orchestrator) {
+            renderer = this.multiplayerController.orchestrator.systems.renderer;
+        } else if (this.gameOrchestrator) {
+            renderer = this.gameOrchestrator.systems.renderer;
+        }
+
+        if (!renderer || !renderer.uiRenderer) return;
         if (this.gameState.phase !== 'gameOver' && this.gameState.phase !== 'victory') return;
 
-        if (this.renderer.uiRenderer.isReturnToMenuHit(x, y)) {
+        if (renderer.uiRenderer.isReturnToMenuHit(x, y)) {
             this.resetToMenu();
         }
     }
@@ -394,13 +216,10 @@ class Game {
     resetToMenu() {
         console.log('Resetting to menu...');
 
-        // Close multiplayer session if active
-        if (this.matchMode === 'multiplayer' && this.mpSession && this.mpSession.connection) {
-            try {
-                this.mpSession.connection.close();
-            } catch {
-                // ignore
-            }
+        // Teardown multiplayer controller if active
+        if (this.multiplayerController) {
+            this.multiplayerController.teardown();
+            this.multiplayerController = null;
         }
 
         // Stop running match loop
@@ -409,34 +228,12 @@ class Game {
             this.gameLoop = null;
         }
 
-        // Teardown systems and listeners that would otherwise duplicate
-        if (this.inputSystem) {
-            this.inputSystem.removeEventListeners();
-        }
-        if (this.eventBus) {
-            this.eventBus.clear();
-        }
-        if (this.combatSystem && typeof this.combatSystem.dispose === 'function') {
-            this.combatSystem.dispose();
-        }
+        // Clear match controllers
+        this.matchInitializer = null;
+        this.gameOrchestrator = null;
 
-        // Clear references
-        this.gameState = null;
-        this.eventBus = null;
-        this.inputSystem = null;
-        this.physicsSystem = null;
-        this.combatSystem = null;
-        this.safeZoneSystem = null;
-        this.aiSystem = null;
-        this.abilitySystem = null;
-        this.cameraSystem = null;
-        this.renderer = null;
-        this.consumables = [];
-
-        this.matchMode = 'solo';
-        this.mpSession = null;
-        this.mpLockstep = null;
-        this.mpPlayers = null;
+        // Reset game state
+        this.gameState = new GameState();
 
         // Recreate StartScreen (and its listeners) exactly once
         if (this.startScreen) {
@@ -451,169 +248,6 @@ class Game {
         }
     }
 
-    // Initialize the game
-    async init() {
-        console.log('Initializing Battle-2D-eath Phase 10: Map Editor...');
-        
-        // Get the current map config (either loaded or default)
-        const mapConfig = getCurrentMapConfig();
-        
-        // Get game configuration (with fallback to defaults)
-        const gameConfig = getGameConfig();
-        console.log('Game config:', gameConfig);
-        
-        // Create player character with selected character type
-        const characterConfig = { ...CHARACTERS[this.selectedCharacter], isPlayer: true };
-        const player = new Player(characterConfig);
-
-        // Apply progression upgrades (works across match types by applying to any human-controlled player)
-        // Keep base stats intact for future recalculation.
-        const maxHpMultiplier = getMaxHpMultiplierFromUpgrades(this.profile);
-        if (Number.isFinite(maxHpMultiplier) && maxHpMultiplier > 0) {
-            player.progressionBaseMaxHP = player.progressionBaseMaxHP || player.maxHP;
-            player.maxHP = player.progressionBaseMaxHP * maxHpMultiplier;
-            player.currentHP = player.maxHP;
-        }
-
-        // Spawn all players (human + bots) spread across the map with safety constraints
-        const totalCharactersToSpawn = gameConfig.match.aiCount + 1;
-        const spawnPoints = this.generateCharacterSpawns(mapConfig, totalCharactersToSpawn, {
-            clearanceRadius: 70,
-            minSpacing: 240,
-            marginFromEdge: 140,
-            maxAttemptsPerSpawn: 250
-        });
-
-        // First spawn is always the human player
-        player.setPosition(spawnPoints[0].x, spawnPoints[0].y);
-        
-        // Equip player with a Blaster weapon (Tier 1)
-        const blasterWeapon = new Weapon(createWeapon('blaster', 1));
-        player.equipWeapon(blasterWeapon);
-        
-        // Add player to game state
-        this.gameState.addCharacter(player);
-        
-        // Create AI opponents (count and distribution from config)
-        const aiCount = gameConfig.match.aiCount;
-        const characterTypes = generateAICharacterTypes(gameConfig.ai.characterDistribution, aiCount);
-        const skillLevels = generateAISkills(gameConfig.ai.skillDistribution, aiCount);
-        
-        for (let i = 0; i < aiCount; i++) {
-            const characterType = characterTypes[i];
-            const skillLevel = skillLevels[i];
-
-            const baseSkillProfile = gameConfig.ai.skillProfiles?.[skillLevel] || null;
-
-            // Per-bot personality variance (kept small; avoids wildly unfair spikes)
-            const varianceStrength = skillLevel === 'expert' ? 0.07 : (skillLevel === 'intermediate' ? 0.1 : 0.14);
-            const jitter = (value, min, max) => {
-                if (typeof value !== 'number') return value;
-                const factor = 1 + (Math.random() - 0.5) * 2 * varianceStrength;
-                const v = value * factor;
-                return Math.max(min, Math.min(max, v));
-            };
-
-            const skillProfile = baseSkillProfile ? {
-                ...baseSkillProfile,
-                reactionTimeSeconds: jitter(baseSkillProfile.reactionTimeSeconds, 0.12, 1.2),
-                perceptionRange: jitter(baseSkillProfile.perceptionRange, 180, 600),
-                aimAccuracy: jitter(baseSkillProfile.aimAccuracy, 0.35, 0.99),
-                aggression: jitter(baseSkillProfile.aggression, 0.15, 0.95),
-                strafeStrength: jitter(baseSkillProfile.strafeStrength, 0.2, 0.8),
-                abilityUseChancePerSecond: jitter(baseSkillProfile.abilityUseChancePerSecond, 0.02, 0.6)
-            } : null;
-            
-            const aiConfig = {
-                ...CHARACTERS[characterType],
-                isPlayer: false,
-                aiSkillLevel: skillLevel,
-                aiProfile: skillProfile
-            };
-            const aiOpponent = new AICharacter(aiConfig);
-
-            // Stable per-bot movement style (breaks hive-mind feel)
-            aiOpponent.strafeSide = Math.random() < 0.5 ? -1 : 1;
-
-            // Spawn AI using the same randomized spawn distribution as the player
-            const spawnPoint = spawnPoints[i + 1];
-            aiOpponent.setPosition(spawnPoint.x, spawnPoint.y);
-            
-            // Add AI to game state
-            this.gameState.addCharacter(aiOpponent);
-            
-            console.log(`AI ${i + 1} spawned: ${aiOpponent.name} (${skillLevel}) at (${Math.round(spawnPoint.x)}, ${Math.round(spawnPoint.y)})`);
-        }
-        
-        // Spawn weapons across the map (count from config)
-        const weaponTypes = ['blaster', 'spear', 'bomb', 'gun'];
-        const weaponSpawns = [];
-        const weaponCount = gameConfig.loot.initialWeapons;
-        
-        for (let i = 0; i < weaponCount; i++) {
-            const angle = (i / 8) * Math.PI * 2;
-            const distance = 400 + Math.random() * 500;
-            let x = mapConfig.centerX + Math.cos(angle) * distance;
-            let y = mapConfig.centerY + Math.sin(angle) * distance;
-            
-            // Find valid spawn position (not on obstacles)
-            const validPos = this.findValidSpawnPosition(x, y, mapConfig, 30);
-            if (validPos) {
-                x = validPos.x;
-                y = validPos.y;
-                
-                const type = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
-                const tier = generateWeaponTier(gameConfig.loot.weaponTierRatios);
-                
-                weaponSpawns.push({ pos: new Vector2D(x, y), type, tier });
-                this.aiSystem.spawnWeapon(new Vector2D(x, y), type, tier);
-            }
-        }
-        
-        // Spawn consumables across the map (count from config)
-        const consumableTypes = ['healthKit', 'shieldPotion'];
-        const consumableCount = gameConfig.loot.initialConsumables;
-        
-        for (let i = 0; i < consumableCount; i++) {
-            const angle = (i / 6) * Math.PI * 2 + Math.PI / 12;
-            const distance = 300 + Math.random() * 600;
-            let x = mapConfig.centerX + Math.cos(angle) * distance;
-            let y = mapConfig.centerY + Math.sin(angle) * distance;
-            
-            // Find valid spawn position (not on obstacles)
-            const validPos = this.findValidSpawnPosition(x, y, mapConfig, 30);
-            if (validPos) {
-                x = validPos.x;
-                y = validPos.y;
-                
-                const type = consumableTypes[Math.floor(Math.random() * consumableTypes.length)];
-                
-                const consumable = new Consumable(createConsumable(type));
-                consumable.setPosition(x, y);
-                this.consumables.push(consumable);
-            }
-        }
-        
-        console.log('Player created:', player.name);
-        console.log('Starting weapon:', blasterWeapon.name);
-        console.log(`${aiCount} AI opponents spawned (${characterTypes.filter(t => t === 'bolt').length} Bolt, ${characterTypes.filter(t => t === 'boulder').length} Boulder)`);
-        console.log(`Skill levels: ${skillLevels.filter(s => s === 'novice').length} novice, ${skillLevels.filter(s => s === 'intermediate').length} intermediate, ${skillLevels.filter(s => s === 'expert').length} expert`);
-        console.log(`${weaponSpawns.length} weapons spawned across the map`);
-        console.log(`${this.consumables.length} consumables spawned (health kits and shield potions)`);
-        console.log(`Map: ${mapConfig.name || 'Random Arena'}`);
-        console.log(`Map size: ${mapConfig.width}x${mapConfig.height}, radius: ${mapConfig.radius}`);
-        console.log(`Terrain: ${mapConfig.bushes.length} bushes, ${mapConfig.obstacles.length} obstacles, ${mapConfig.waterAreas.length} water areas`);
-        // Initialize camera to player position (no lag on start)
-        this.cameraSystem.x = player.position.x - CANVAS_WIDTH / 2;
-        this.cameraSystem.y = player.position.y - CANVAS_HEIGHT / 2;
-        this.cameraSystem.targetX = this.cameraSystem.x;
-        this.cameraSystem.targetY = this.cameraSystem.y;
-        this.gameState.camera = this.cameraSystem.getBounds();
-        
-        console.log('Game initialized successfully!');
-        
-        return true;
-    }
 
     // Update game state (called at fixed timestep)
     update(deltaTime) {
@@ -622,374 +256,15 @@ class Game {
             return;
         }
 
-        if (this.matchMode === 'multiplayer') {
-            this.updateMultiplayer(deltaTime);
-            return;
-        }
-        
-        // Update game time
-        this.gameState.updateTime(deltaTime);
-        
-        // Update safe zone system (Phase 6)
-        this.safeZoneSystem.update(deltaTime);
-        
-        // Update camera to follow player
-        if (this.gameState.player) {
-            this.cameraSystem.update(this.gameState.player);
-            this.gameState.camera = this.cameraSystem.getBounds();
-        }
-        
-        // Update input system
-        this.inputSystem.update(this.gameState.player);
-        
-        // Get player input
-        const movementInput = this.inputSystem.getMovementInput();
-        
-        // Update player with input
-        if (this.gameState.player) {
-            this.gameState.player.update(deltaTime, movementInput);
-            
-            // Check if weapon was fired
-            const weaponInput = this.inputSystem.checkWeaponFired();
-            if (weaponInput.fired && weaponInput.weaponSlot >= 0) {
-                // Switch to the weapon slot that was pressed
-                this.gameState.player.switchToWeapon(weaponInput.weaponSlot);
-                
-                // Fire the weapon
-                const weapon = this.gameState.player.getActiveWeapon();
-                if (weapon) {
-                    this.combatSystem.fireWeapon(
-                        this.gameState.player,
-                        weapon,
-                        weaponInput.angle
-                    );
-                }
-            }
-            
-            // Check if health kit was used (Phase 7)
-            if (this.inputSystem.checkHealthKitUsed()) {
-                if (this.gameState.player.useHealthKit()) {
-                    console.log('Used health kit!');
-                    this.eventBus.emit('healthKitUsed', {
-                        character: this.gameState.player
-                    });
-                }
-            }
-            
-            // Update ability preview (for Ground Slam)
-            const isChargingAbility = this.inputSystem.isAbilityCharging();
-            this.abilitySystem.updateGroundSlamPreview(this.gameState.player, isChargingAbility);
-            
-            // Check if ability was activated (Phase 7)
-            if (this.inputSystem.checkAbilityActivated()) {
-                if (this.abilitySystem.activateAbility(this.gameState.player)) {
-                    console.log('Activated special ability!');
-                }
-            }
-            
-            // Check for weapon pickups
-            this.checkWeaponPickups(this.gameState.player);
-            
-            // Check for consumable pickups (Phase 7)
-            this.checkConsumablePickups(this.gameState.player);
-        }
-        
-        // Update all non-player characters
-        this.gameState.characters.forEach(character => {
-            if (!character.isPlayer) {
-                character.update(deltaTime);
-            }
-        });
-        
-        // Update AI system
-        this.aiSystem.update(deltaTime);
-        
-        // Update physics (movement and collision)
-        this.physicsSystem.update(deltaTime);
-        
-        // Update combat system
-        this.combatSystem.update(deltaTime);
-        
-        // Update ability system (Phase 7)
-        this.abilitySystem.update(deltaTime);
-        
-        // Handle character deaths and loot dropping
-        this.gameState.characters.forEach(character => {
-            if (character.isDead && !character.isPlayer) {
-                this.aiSystem.handleCharacterDeath(character);
-            }
-        });
-        
-        // Remove dead characters after a delay
-        this.gameState.characters = this.gameState.characters.filter(char => {
-            if (char.isDead && !char.isPlayer) {
-                // Keep dead characters for a short time for visual feedback
-                return false;
-            }
-            return true;
-        });
-        
-        // Check match end conditions (Phase 6)
-        this.gameState.checkMatchEnd();
-
-        // Award meta rewards exactly once when the match ends.
-        if (!this.rewardsAwarded && (this.gameState.phase === 'gameOver' || this.gameState.phase === 'victory')) {
-            this.rewardsAwarded = true;
-
-            const rewards = computeMatchRewards(this.gameState.matchStats);
-            this.gameState.matchRewards = {
-                xpEarned: rewards.xpEarned,
-                coinsEarned: rewards.coinsEarned
-            };
-            this.profile.xp += rewards.xpEarned;
-            this.profile.coins += rewards.coinsEarned;
-
-            recordMatchToProfile(this.profile, this.gameState.matchStats, {
-                character: this.selectedCharacter || null,
-                map: this.selectedMap?.name || this.selectedMap?.file || null
-            });
-
-            saveProfile(this.profile);
-
-            console.log('=== META REWARDS ===');
-            console.log(`XP +${rewards.xpEarned}, Coins +${rewards.coinsEarned}`);
+        // Delegate to appropriate controller
+        if (this.multiplayerController) {
+            this.multiplayerController.update(deltaTime);
+        } else if (this.gameOrchestrator) {
+            this.gameOrchestrator.update(deltaTime);
         }
     }
 
-    updateMultiplayer(deltaTime) {
-        const localPlayer = this.mpPlayers?.local;
-        const remotePlayer = this.mpPlayers?.remote;
-        if (!localPlayer || !remotePlayer || !this.mpLockstep) return;
 
-        // Update local input system (UI + capture)
-        this.inputSystem.update(localPlayer);
-
-        const getLocalInput = () => {
-            const move = this.inputSystem.getMovementInput();
-            const weaponInput = this.inputSystem.checkWeaponFired();
-            const fired = !!weaponInput.fired;
-
-            return {
-                moveX: move.x,
-                moveY: move.y,
-                fire: fired,
-                aimAngle: fired ? weaponInput.angle : 0,
-                ability: this.inputSystem.checkAbilityActivated(),
-                heal: this.inputSystem.checkHealthKitUsed()
-            };
-        };
-
-        // Feed the lockstep layer (sends inputs ahead)
-        this.mpLockstep.tick(getLocalInput);
-
-        // Advance simulation only when we have both players' inputs for the next tick.
-        // Deterministic lockstep may stall (visible stutter) under high latency.
-        if (this.mpLockstep.canSimulateNextTick()) {
-            const step = this.mpLockstep.popNextTickInputs();
-            if (!step) return;
-
-            // Apply per-tick time
-            this.gameState.updateTime(deltaTime);
-
-            // Safe zone and camera
-            this.safeZoneSystem.update(deltaTime);
-            this.cameraSystem.update(localPlayer);
-            this.gameState.camera = this.cameraSystem.getBounds();
-
-            const frames = step.frames;
-            const localFrame = this.mpLockstep.localPlayerIndex === 0 ? frames[0] : frames[1];
-            const remoteFrame = this.mpLockstep.localPlayerIndex === 0 ? frames[1] : frames[0];
-
-            // Update player movement inputs
-            localPlayer.update(deltaTime, { x: localFrame.moveX, y: localFrame.moveY });
-            remotePlayer.update(deltaTime, { x: remoteFrame.moveX, y: remoteFrame.moveY });
-
-            // Process actions (fire/heal/ability)
-            this.applyMultiplayerActions(localPlayer, localFrame);
-            this.applyMultiplayerActions(remotePlayer, remoteFrame);
-
-            // Physics + combat + abilities
-            this.physicsSystem.update(deltaTime);
-            this.combatSystem.update(deltaTime);
-            this.abilitySystem.update(deltaTime);
-
-            // Match end (1v1)
-            if (localPlayer.isDead && !remotePlayer.isDead) {
-                this.endMultiplayerMatch('playerDied');
-            } else if (!localPlayer.isDead && remotePlayer.isDead) {
-                this.endMultiplayerMatch('playerWon');
-            }
-
-        }
-
-        // Award meta rewards exactly once when the match ends.
-        if (!this.rewardsAwarded && (this.gameState.phase === 'gameOver' || this.gameState.phase === 'victory')) {
-            this.rewardsAwarded = true;
-            const rewards = computeMatchRewards(this.gameState.matchStats);
-            this.gameState.matchRewards = {
-                xpEarned: rewards.xpEarned,
-                coinsEarned: rewards.coinsEarned
-            };
-            this.profile.xp += rewards.xpEarned;
-            this.profile.coins += rewards.coinsEarned;
-
-            recordMatchToProfile(this.profile, this.gameState.matchStats, {
-                character: 'bolt',
-                map: this.mpSession?.mapFile || 'multiplayer'
-            });
-            saveProfile(this.profile);
-        }
-    }
-
-    endMultiplayerMatch(reason) {
-        if (!this.gameState || this.gameState.phase !== 'playing') return;
-
-        this.gameState.matchEndReason = reason;
-        this.gameState.phase = (reason === 'playerWon') ? 'victory' : 'gameOver';
-
-        this.gameState.matchStats.survivalTime = this.gameState.matchTime;
-        this.gameState.matchStats.finalPlacement = (reason === 'playerWon') ? 1 : 2;
-
-        console.log('=== MULTIPLAYER MATCH END ===');
-        console.log(`Reason: ${reason}`);
-        console.log(`Survival Time: ${Math.floor(this.gameState.matchStats.survivalTime)}s`);
-        console.log(`Kills: ${this.gameState.matchStats.kills}`);
-        console.log(`Damage Dealt: ${Math.round(this.gameState.matchStats.damageDealt)}`);
-        console.log(`Final Placement: ${this.gameState.matchStats.finalPlacement}`);
-    }
-
-    applyMultiplayerActions(player, frame) {
-        if (!player || player.isDead) return;
-
-        if (frame.fire) {
-            player.switchToWeapon(0);
-            const weapon = player.getActiveWeapon();
-            if (weapon) {
-                this.combatSystem.fireWeapon(player, weapon, frame.aimAngle);
-            }
-        }
-
-        if (frame.heal) {
-            if (player.useHealthKit()) {
-                this.eventBus.emit('healthKitUsed', { character: player });
-            }
-        }
-
-        if (frame.ability) {
-            this.abilitySystem.activateAbility(player);
-        }
-    }
-
-    // Check if player can pickup weapons (with timer)
-    checkWeaponPickups(player) {
-        const availableWeapons = this.aiSystem.getAvailableWeapons();
-        const deltaTime = 1/60; // Approximate frame time
-        
-        availableWeapons.forEach(pickup => {
-            if (!pickup.active) return;
-            
-            // Only update pickup for weapons player is near
-            if (pickup.isInRange(player)) {
-                const config = pickup.getWeaponConfig();
-                const eligibility = player.getWeaponPickupResult(config);
-
-                // Never start/continue pickup progress for invalid pickups
-                if (!eligibility.ok) {
-                    pickup.playerPickupBlockedReason = eligibility.reason;
-                    pickup.resetPickup();
-                    return;
-                }
-
-                pickup.playerPickupBlockedReason = null;
-
-                // Update pickup progress
-                if (pickup.updatePickup(player, deltaTime)) {
-                    // Try to pickup weapon
-                    const result = player.tryPickupWeapon(config);
-                    if (result.ok) {
-                        // Successfully picked up
-                        pickup.active = false;
-                        
-                        // Emit event
-                        this.eventBus.emit('weaponPickedUp', {
-                            character: player,
-                            weaponType: config.type,
-                            tier: config.tier
-                        });
-                        
-                        console.log(`Player picked up ${config.name} (Tier ${config.tier})`);
-                    } else {
-                        // If anything changed mid-pickup, stop the loader
-                        pickup.playerPickupBlockedReason = result.reason;
-                        pickup.resetPickup();
-                    }
-                }
-            } else {
-                pickup.playerPickupBlockedReason = null;
-            }
-        });
-    }
-    
-    // Check if player can pickup consumables (Phase 7)
-    checkConsumablePickups(player) {
-        const deltaTime = 1/60; // Approximate frame time
-        
-        this.consumables.forEach(consumable => {
-            if (!consumable.active) return;
-            
-            // Only update pickup for consumables player is near
-            if (consumable.isInRange(player)) {
-                const config = consumable.getConfig();
-
-                // Block pickup progress if the player can't actually take the item
-                if (config.type === 'healthKit' && !player.canCarryHealthKit()) {
-                    consumable.playerPickupBlockedReason = 'health_kits_full';
-                    consumable.resetPickup();
-                    return;
-                }
-                if (config.type === 'shieldPotion' && player.shield >= 100) {
-                    consumable.playerPickupBlockedReason = 'shield_full';
-                    consumable.resetPickup();
-                    return;
-                }
-
-                consumable.playerPickupBlockedReason = null;
-
-                // Update pickup progress
-                if (consumable.updatePickup(player, deltaTime)) {
-                    // Try to pickup consumable
-                    let success = false;
-                    if (config.type === 'healthKit') {
-                        success = player.addHealthKit();
-                        if (success) {
-                            console.log('Picked up health kit!');
-                        }
-                    } else if (config.type === 'shieldPotion') {
-                        player.addShield(50);
-                        success = true;
-                        console.log('Picked up shield potion!');
-                    }
-
-                    if (success) {
-                        // Successfully picked up
-                        consumable.active = false;
-
-                        // Emit event
-                        this.eventBus.emit('consumablePickedUp', {
-                            character: player,
-                            consumableType: config.type
-                        });
-                    } else {
-                        // If anything changed mid-pickup (inventory full), stop the loader
-                        consumable.playerPickupBlockedReason = 'inventory_full_no_replace';
-                        consumable.resetPickup();
-                    }
-                }
-            } else {
-                consumable.playerPickupBlockedReason = null;
-            }
-        });
-    }
 
     // Render game (called every frame)
     render(interpolation) {
@@ -1006,10 +281,10 @@ class Game {
                 if (this.startScreenLoop) {
                     this.startScreenLoop.stop();
                 }
-                this.startMultiplayerMatch(mpSession);
+                this.startMultiplayerMatch(mpSession.session, mpSession.characterType, mpSession.selectedMap, mpSession.isHost);
                 return;
             }
-            
+
             // Check if start was requested
             if (this.startScreen.checkStartRequested()) {
                 console.log('Start button pressed, starting game...');
@@ -1020,142 +295,58 @@ class Game {
                     this.startScreenLoop.stop();
                 }
                 // Start the game
-                this.startGame();
+                this.startSoloMatch(this.selectedCharacter, this.selectedMap);
             }
             return;
         }
-        
+
         // Render game if playing
-        if (this.phase === 'playing' && this.renderer) {
-            this.renderer.render(
-                this.gameState,
-                this.inputSystem,
-                this.gameLoop,
-                interpolation,
-                this.combatSystem,
-                this.aiSystem,
-                this.consumables,
-                this.abilitySystem
-            );
+        if (this.phase === 'playing') {
+            // Delegate rendering to the appropriate controller's renderer
+            if (this.multiplayerController) {
+                // Multiplayer rendering is handled by the controller
+                // For now, assume the renderer is accessible
+                if (this.multiplayerController.orchestrator && this.multiplayerController.orchestrator.systems.renderer) {
+                    this.multiplayerController.orchestrator.systems.renderer.render(
+                        this.gameState,
+                        this.multiplayerController.orchestrator.systems.inputSystem,
+                        this.gameLoop,
+                        interpolation,
+                        this.multiplayerController.orchestrator.systems.combatSystem,
+                        this.multiplayerController.orchestrator.systems.aiSystem,
+                        [], // No consumables in multiplayer
+                        this.multiplayerController.orchestrator.systems.abilitySystem
+                    );
+                }
+            } else if (this.gameOrchestrator && this.gameOrchestrator.systems.renderer) {
+                this.gameOrchestrator.systems.renderer.render(
+                    this.gameState,
+                    this.gameOrchestrator.systems.inputSystem,
+                    this.gameLoop,
+                    interpolation,
+                    this.gameOrchestrator.systems.combatSystem,
+                    this.gameOrchestrator.systems.aiSystem,
+                    this.gameOrchestrator.spawnManager.consumables,
+                    this.gameOrchestrator.systems.abilitySystem
+                );
+            }
         }
     }
 
     // Handle window resize
     onResize() {
-        if (this.renderer) {
-            this.renderer.resize();
+        let renderer = null;
+        if (this.multiplayerController && this.multiplayerController.orchestrator) {
+            renderer = this.multiplayerController.orchestrator.systems.renderer;
+        } else if (this.gameOrchestrator) {
+            renderer = this.gameOrchestrator.systems.renderer;
+        }
+
+        if (renderer) {
+            renderer.resize();
         }
     }
     
-    // Find valid spawn position not on obstacles
-    findValidSpawnPosition(x, y, mapConfig, clearanceRadius = 30, maxAttempts = 10) {
-        // Check if position overlaps with any obstacle
-        const checkPosition = (checkX, checkY) => {
-            for (const obstacle of mapConfig.obstacles) {
-                // Calculate obstacle bounds
-                const obstacleLeft = obstacle.position.x - obstacle.width / 2;
-                const obstacleRight = obstacle.position.x + obstacle.width / 2;
-                const obstacleTop = obstacle.position.y - obstacle.height / 2;
-                const obstacleBottom = obstacle.position.y + obstacle.height / 2;
-                
-                // Check if spawn position is too close to obstacle (with clearance)
-                if (checkX + clearanceRadius > obstacleLeft &&
-                    checkX - clearanceRadius < obstacleRight &&
-                    checkY + clearanceRadius > obstacleTop &&
-                    checkY - clearanceRadius < obstacleBottom) {
-                    return false; // Overlaps with obstacle
-                }
-            }
-            return true; // Valid position
-        };
-        
-        // Try original position first
-        if (checkPosition(x, y)) {
-            return { x, y };
-        }
-        
-        // Try nearby positions in a spiral pattern
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const radius = attempt * 50; // Expand search radius
-            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
-                const testX = x + Math.cos(angle) * radius;
-                const testY = y + Math.sin(angle) * radius;
-                
-                // Make sure it's still within map bounds
-                const distFromCenter = Math.sqrt(
-                    Math.pow(testX - mapConfig.centerX, 2) +
-                    Math.pow(testY - mapConfig.centerY, 2)
-                );
-                
-                if (distFromCenter < mapConfig.radius - 100 && checkPosition(testX, testY)) {
-                    return { x: testX, y: testY };
-                }
-            }
-        }
-        
-        // If all attempts fail, return null (skip this spawn)
-        console.warn(`Could not find valid spawn position near (${Math.round(x)}, ${Math.round(y)})`);
-        return null;
-    }
-
-    generateCharacterSpawns(mapConfig, count, options = {}, randomFn = Math.random) {
-        const clearanceRadius = options.clearanceRadius ?? 60;
-        const minSpacing = options.minSpacing ?? 220;
-        const marginFromEdge = options.marginFromEdge ?? 140;
-        const maxAttemptsPerSpawn = options.maxAttemptsPerSpawn ?? 200;
-
-        const spawns = [];
-
-        const isFarEnoughFromOthers = (candidate) => {
-            const minSpacingSq = minSpacing * minSpacing;
-            for (let i = 0; i < spawns.length; i++) {
-                const dx = candidate.x - spawns[i].x;
-                const dy = candidate.y - spawns[i].y;
-                if (dx * dx + dy * dy < minSpacingSq) return false;
-            }
-            return true;
-        };
-
-        for (let i = 0; i < count; i++) {
-            let chosen = null;
-
-            for (let attempt = 0; attempt < maxAttemptsPerSpawn; attempt++) {
-                const angle = randomFn() * Math.PI * 2;
-                const maxR = Math.max(50, mapConfig.radius - marginFromEdge);
-                const r = Math.sqrt(randomFn()) * maxR;
-                const x = mapConfig.centerX + Math.cos(angle) * r;
-                const y = mapConfig.centerY + Math.sin(angle) * r;
-
-                const validPos = this.findValidSpawnPosition(x, y, mapConfig, clearanceRadius, 6);
-                if (!validPos) continue;
-                if (!isFarEnoughFromOthers(validPos)) continue;
-
-                chosen = validPos;
-                break;
-            }
-
-            if (!chosen) {
-                console.warn(`Could not find safe random spawn for character ${i + 1}; falling back to map spawn list if available.`);
-                if (mapConfig.characterSpawns && mapConfig.characterSpawns.length > 0) {
-                    const fallback = mapConfig.characterSpawns[i % mapConfig.characterSpawns.length];
-                    const validFallback = this.findValidSpawnPosition(
-                        fallback.x,
-                        fallback.y,
-                        mapConfig,
-                        clearanceRadius,
-                        10
-                    );
-                    chosen = validFallback || { x: mapConfig.centerX, y: mapConfig.centerY };
-                } else {
-                    chosen = { x: mapConfig.centerX, y: mapConfig.centerY };
-                }
-            }
-
-            spawns.push(chosen);
-        }
-
-        return spawns;
-    }
 }
 
 // Initialize and start the game when DOM is ready
