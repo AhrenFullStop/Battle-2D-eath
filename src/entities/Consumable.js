@@ -18,6 +18,9 @@ export class Consumable extends Entity {
         this.pickupTime = 0.5; // 0.5 seconds to pickup
         this.isBeingPickedUp = false;
         this.pickupCharacter = null;
+
+        // UI hint (optional; set externally by pickup logic)
+        this.playerPickupBlockedReason = null;
     }
     
     // Check if character is in range

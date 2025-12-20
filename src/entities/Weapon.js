@@ -314,27 +314,48 @@ export class WeaponPickup extends Entity {
     
     // Update pickup progress
     updatePickup(character, deltaTime) {
-        if (!this.isInRange(character)) {
-            // Reset if character moves away
-            this.resetPickup();
+        // If someone is already picking this up, don't allow other characters to
+        // reset/steal progress. Release the claim only if the claimant becomes
+        // invalid (dead/inactive) or leaves range.
+        if (this.isBeingPickedUp && this.pickupCharacter) {
+            const claimant = this.pickupCharacter;
+            const claimantInvalid = !claimant.active || claimant.isDead;
+            const claimantOutOfRange = !this.isInRange(claimant);
+            if (claimantInvalid || claimantOutOfRange) {
+                this.resetPickup();
+            }
+        }
+
+        // If still claimed by someone else, do nothing (prevents thrashing when
+        // multiple bots/players overlap the same pickup).
+        if (this.isBeingPickedUp && this.pickupCharacter && this.pickupCharacter !== character) {
             return false;
         }
-        
-        // Start or continue pickup
-        if (!this.isBeingPickedUp || this.pickupCharacter !== character) {
+
+        // If this character isn't in range, only reset if they are the claimant
+        // (otherwise just ignore).
+        if (!this.isInRange(character)) {
+            if (this.pickupCharacter === character) {
+                this.resetPickup();
+            }
+            return false;
+        }
+
+        // Claim if unclaimed
+        if (!this.isBeingPickedUp) {
             this.isBeingPickedUp = true;
             this.pickupCharacter = character;
             this.currentPickupProgress = 0;
         }
-        
+
         // Increase progress
         this.currentPickupProgress += deltaTime;
-        
+
         // Check if pickup complete
         if (this.currentPickupProgress >= this.pickupTime) {
             return true; // Ready to pickup
         }
-        
+
         return false; // Still picking up
     }
     

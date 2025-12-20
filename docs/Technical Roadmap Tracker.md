@@ -27,18 +27,9 @@ Build an open source, offline, peer-to-peer (P2P) battle royale that is simple, 
 - Safe zone system exists with warning overlay.
 - Map editor exists as a separate entrypoint (editor.html).
 
-### Known problems (confirmed in code)
-- **Map background images not shown in the menu:** StartScreen uses a placeholder gradient + “IMAGE” badge for image backgrounds rather than rendering the image.
-  - See: preview rendering in [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
-- **Island map background image works on localhost but fails on GitHub Pages (reported):**
-  - In-game background images load from `maps/backgrounds/<filename>`.
-  - See: background loading in [src/renderer/MapRenderer.js](../src/renderer/MapRenderer.js)
-  - Map specifies background image: [maps/Island.json](../maps/Island.json) and registry: [maps/manifest.json](../maps/manifest.json)
-  - Likely causes to validate: base-path handling on GH Pages, relative URL resolution, and case-sensitive path mismatches.
-
 ### Technical gaps vs stated goals
-- **Menu UX is not scalable** for many maps/characters; needs a redesign and a proper navigation model.
-- **AI lacks challenge and variety**; no ability usage; weak obstacle navigation.
+- **Menu UX is not scalable** for many maps/characters; needs a redesign and a proper navigation model. (addressed)
+- **AI lacks challenge and variety**; no ability usage; weak obstacle navigation. (addressed)
 - **RPG meta loop** (XP/coins/upgrades) not present.
 - **Multiplayer** not present.
 - **Editor accessibility + mobile usability** not present.
@@ -450,19 +441,18 @@ Milestone Completion Notes (fill in when done):
   - Context: Combat currently checks collisions against default map obstacles.
   - Acceptance: Uses current loaded map config for obstacles.
 
-- [ ] Remove per-frame `Date.now()`-driven gameplay randomness from simulation paths
+- [ ] Remove per-frame `Date.now()`- driven gameplay randomness from simulation paths
   - Acceptance: Visual-only effects may use wall clock; simulation uses tick time.
 
 - [ ] Add minimal debug overlay toggles for AI + networking
   - Acceptance: One flag enables rendering of AI state and target info.
 
 
-(ignore) Notes:
-- Weapon Pickup: If a few (2+) bots (or even the player and a bot) sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
-- Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
-- Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
-- Game Over Screen: left align the came over stats
-- Basics: add a favicon
-- CI/CD: Change deployment to automatically add a version counter. Display version on bottom of start screen
-- Start Map Selection: Make settings in map selection more clickable
+### Low hanging fruit: 
+- [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
+- [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
+- [] Game Over Screen: left align the came over stats
+- [] Basics: add a favicon
+- [] CI/CD: Change deployment to automatically add a version counter. Display version on bottom of start screen
+- [] Map settings: Make settings in map selection (start screen) more clickable. right now its too small.
 

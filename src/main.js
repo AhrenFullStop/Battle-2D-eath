@@ -598,10 +598,24 @@ class Game {
             
             // Only update pickup for consumables player is near
             if (consumable.isInRange(player)) {
+                const config = consumable.getConfig();
+
+                // Block pickup progress if the player can't actually take the item
+                if (config.type === 'healthKit' && !player.canCarryHealthKit()) {
+                    consumable.playerPickupBlockedReason = 'health_kits_full';
+                    consumable.resetPickup();
+                    return;
+                }
+                if (config.type === 'shieldPotion' && player.shield >= 100) {
+                    consumable.playerPickupBlockedReason = 'shield_full';
+                    consumable.resetPickup();
+                    return;
+                }
+
+                consumable.playerPickupBlockedReason = null;
+
                 // Update pickup progress
                 if (consumable.updatePickup(player, deltaTime)) {
-                    const config = consumable.getConfig();
-                    
                     // Try to pickup consumable
                     let success = false;
                     if (config.type === 'healthKit') {
@@ -614,21 +628,24 @@ class Game {
                         success = true;
                         console.log('Picked up shield potion!');
                     }
-                    
+
                     if (success) {
                         // Successfully picked up
                         consumable.active = false;
-                        
+
                         // Emit event
                         this.eventBus.emit('consumablePickedUp', {
                             character: player,
                             consumableType: config.type
                         });
                     } else {
-                        // Couldn't pickup (inventory full), reset timer
+                        // If anything changed mid-pickup (inventory full), stop the loader
+                        consumable.playerPickupBlockedReason = 'inventory_full_no_replace';
                         consumable.resetPickup();
                     }
                 }
+            } else {
+                consumable.playerPickupBlockedReason = null;
             }
         });
     }
