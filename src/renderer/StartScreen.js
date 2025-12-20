@@ -779,16 +779,20 @@ export class StartScreen {
         const ctx = this.ctx;
         const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
         const fontSize = Math.max(10, 12 * scale);
-        const pad = 10 * scale;
+        const pad = 8 * scale;
 
         const text = BUILD_VERSION && BUILD_VERSION !== 'dev' ? `v${BUILD_VERSION}` : 'vdev';
 
         ctx.save();
         ctx.font = `${fontSize}px Arial`;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-        ctx.fillText(text, pad, this.canvas.height - pad);
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(text, this.canvas.width / 2, this.canvas.height - pad);
         ctx.restore();
     }
 
