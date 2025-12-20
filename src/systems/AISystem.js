@@ -5,8 +5,10 @@ import { Weapon, WeaponPickup } from '../entities/Weapon.js';
 import { Consumable } from '../entities/Consumable.js';
 import { createWeapon } from '../config/weapons.js';
 import { createConsumable } from '../config/consumables.js';
-import { MAP_CONFIG, getCurrentMapConfig, getGameConfig } from '../config/map.js';
-import { circleRectCollision } from '../utils/collision.js';
+import { getCurrentMapConfig, getGameConfig } from '../config/map.js';
+import { AINavigationSystem } from './ai/AINavigationSystem.js';
+import { AIPerceptionSystem } from './ai/AIPerceptionSystem.js';
+import { AIBehaviorSystem } from './ai/AIBehaviorSystem.js';
 
 export class AISystem {
     constructor(gameState, eventBus, combatSystem, abilitySystem = null) {
@@ -16,6 +18,14 @@ export class AISystem {
         this.abilitySystem = abilitySystem;
         const gameConfig = getGameConfig();
         this.aiSpeedMultiplier = gameConfig.movement?.aiSpeedMultiplier ?? 2.2;
+        
+        // Initialize specialized subsystems
+        this.navigationSystem = new AINavigationSystem();
+        this.perceptionSystem = new AIPerceptionSystem();
+        this.behaviorSystem = new AIBehaviorSystem(
+            this.navigationSystem,
+            this.perceptionSystem
+        );
         
         // Available weapons for AI to pick up
         this.availableWeapons = [];
@@ -50,770 +60,66 @@ export class AISystem {
     // Update individual AI character
     updateAI(ai, deltaTime) {
         // Perception - detect player and threats
-        this.updatePerception(ai);
+        this.perceptionSystem.updatePerception(
+            ai,
+            this.gameState.characters,
+            this.gameState.consumables,
+            this.availableWeapons
+        );
         
         // Decision making
         if (ai.canMakeDecision()) {
-            this.makeDecision(ai);
+            this.behaviorSystem.makeDecision(ai, this.gameState);
             ai.resetDecisionCooldown();
         }
         
         // Execute current state behavior
         switch (ai.getState()) {
             case 'moveToSafeZone':
-                this.executeMoveToSafeZone(ai, deltaTime);
+                this.behaviorSystem.executeMoveToSafeZone(
+                    ai,
+                    deltaTime,
+                    this.aiSpeedMultiplier,
+                    this.gameState
+                );
+                // Still fire at enemies if they're in the way
+                if (ai.targetEnemy && ai.weapons.length > 0) {
+                    this.behaviorSystem.tryFireWeapon(ai, this.combatSystem);
+                }
                 break;
             case 'patrol':
-                this.executePatrol(ai, deltaTime);
+                this.behaviorSystem.executePatrol(ai, deltaTime, this.aiSpeedMultiplier);
                 break;
             case 'seekLoot':
-                this.executeSeekLoot(ai, deltaTime);
+                this.behaviorSystem.executeSeekLoot(
+                    ai,
+                    deltaTime,
+                    this.aiSpeedMultiplier,
+                    this.gameState,
+                    (aiChar, weaponPickup) => this.pickupWeapon(aiChar, weaponPickup)
+                );
                 break;
             case 'combat':
-                this.executeCombat(ai, deltaTime);
+                this.behaviorSystem.executeCombat(
+                    ai,
+                    deltaTime,
+                    this.aiSpeedMultiplier,
+                    this.abilitySystem
+                );
+                // Try to fire weapon
+                this.behaviorSystem.tryFireWeapon(ai, this.combatSystem);
                 break;
             case 'flee':
-                this.executeFlee(ai, deltaTime);
+                this.behaviorSystem.executeFlee(
+                    ai,
+                    deltaTime,
+                    this.aiSpeedMultiplier,
+                    this.gameState,
+                    this.abilitySystem
+                );
+                // Try to fire weapon while fleeing (fight back)
+                this.behaviorSystem.tryFireWeapon(ai, this.combatSystem);
                 break;
-        }
-    }
-    
-    // Update AI perception
-    updatePerception(ai) {
-        // Find nearest enemy (player or other AI)
-        let nearestEnemy = null;
-        let nearestDistance = ai.perceptionRange;
-        
-        this.gameState.characters.forEach(character => {
-            if (character === ai || character.isDead) return;
-            
-            const distance = ai.position.distanceTo(character.position);
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
-                nearestEnemy = character;
-            }
-        });
-        
-        // Set target enemy if found, otherwise clear
-        if (nearestEnemy) {
-            ai.setTargetEnemy(nearestEnemy);
-        } else if (ai.targetEnemy && ai.targetEnemy.isDead) {
-            ai.setTargetEnemy(null);
-        } else if (ai.targetEnemy) {
-            // Check if current enemy is still in range
-            const distanceToEnemy = ai.position.distanceTo(ai.targetEnemy.position);
-            if (distanceToEnemy > ai.perceptionRange * 1.5) {
-                ai.setTargetEnemy(null);
-            }
-        }
-        
-        // Look for nearby health kits if damaged and has room
-        const needsHealing = ai.currentHP < ai.maxHP * 0.7; // Below 70% health
-        const hasRoomForHealthKit = ai.healthKits < ai.maxHealthKits;
-        
-        if (needsHealing && hasRoomForHealthKit && !ai.targetConsumable) {
-            this.findNearestHealthKit(ai);
-        }
-        
-        // Weapon seeking:
-        // - If unarmed: aggressively seek the nearest weapon anywhere on the map.
-        // - If armed: only consider nearby upgrades (keeps priorities sane).
-        if (!ai.targetWeapon) {
-            if (ai.weapons.length === 0) {
-                this.findNearestWeapon(ai, { ignoreRange: true });
-            } else if (ai.weapons.length < ai.maxWeapons) {
-                this.findNearestWeapon(ai, { ignoreRange: false });
-            }
-        }
-    }
-    
-    // Make decision about what to do
-    makeDecision(ai) {
-        const safeZoneSystem = this.gameState.safeZoneSystem;
-        const hasSafeZone = !!safeZoneSystem;
-        const isOutsideSafeZone = hasSafeZone && safeZoneSystem.isOutsideZone(ai.position.x, ai.position.y);
-
-        // Priority 0: Avoid safe zone BEFORE taking damage, but not at all costs.
-        // If we're close to the edge and the zone is shrinking or a phase is imminent, bias toward moving inward.
-        let shouldPreemptSafeZone = false;
-        if (hasSafeZone) {
-            const info = safeZoneSystem.getSafeZoneInfo();
-            const dx = ai.position.x - info.centerX;
-            const dy = ai.position.y - info.centerY;
-            const distToCenter = Math.sqrt(dx * dx + dy * dy);
-            const distanceFromEdge = info.currentRadius - distToCenter;
-            const timeUntilNextMs = typeof safeZoneSystem.getTimeUntilNextPhase === 'function' ? safeZoneSystem.getTimeUntilNextPhase() : 0;
-
-            const buffer = Math.max(90, Math.min(180, info.currentRadius * 0.09));
-            const phaseSoon = timeUntilNextMs > 0 && timeUntilNextMs < 9000;
-            const riskRising = info.isShrinking || phaseSoon || info.currentDamage > 0;
-
-            if (distanceFromEdge < buffer && riskRising) {
-                shouldPreemptSafeZone = true;
-
-                // Not at all costs: if we're already engaged in close combat and healthy, keep fighting.
-                if (ai.targetEnemy && ai.weapons.length > 0) {
-                    const dEnemy = ai.position.distanceTo(ai.targetEnemy.position);
-                    const engagedClose = dEnemy < ai.combatRange * 0.75;
-                    if (engagedClose && ai.getHealthPercentage() > ai.fleeHealthThreshold + 0.15) {
-                        shouldPreemptSafeZone = false;
-                    }
-                }
-            }
-        }
-
-        if (isOutsideSafeZone || shouldPreemptSafeZone) {
-            ai.setState('moveToSafeZone');
-            return;
-        }
-
-        // Priority 1: If unarmed, aggressively loot until we have at least 1 weapon.
-        if (ai.weapons.length === 0) {
-            if (ai.targetWeapon && ai.targetWeapon.active) {
-                ai.setState('seekLoot');
-                return;
-            }
-            // Fall back to patrol if no weapons exist (should be rare)
-            ai.setState('patrol');
-            return;
-        }
-        
-        // Priority 2: Flee if low health
-        if (ai.shouldFlee()) {
-            ai.setState('flee');
-            return;
-        }
-        
-        // Priority 3: Seek health kit if damaged and found one
-        const needsHealing = ai.currentHP < ai.maxHP * 0.5; // Below 50% health
-        const hasRoomForHealthKit = ai.healthKits < ai.maxHealthKits;
-        if (needsHealing && hasRoomForHealthKit && ai.targetConsumable) {
-            ai.setState('seekLoot');
-            return;
-        }
-        
-        // Priority 4: Combat if enemy detected and has weapon
-        if (ai.targetEnemy && ai.weapons.length > 0) {
-            ai.setState('combat');
-            return;
-        }
-        
-        // Priority 5: Seek weapon if don't have max weapons and found a target
-        if (ai.weapons.length < ai.maxWeapons && ai.targetWeapon && ai.targetWeapon.active) {
-            ai.setState('seekLoot');
-            return;
-        }
-        
-        // Default: Patrol
-        ai.setState('patrol');
-    }
-    
-    // Execute patrol behavior
-    executePatrol(ai, deltaTime) {
-        // Check if AI is stuck on obstacle
-        this.checkIfStuck(ai, deltaTime);
-        
-        // Add movement variation - 10% chance per second to change speed/direction
-        if (!ai.moveSpeedMultiplier) ai.moveSpeedMultiplier = 1.0;
-        if (!ai.lastVariationChange) ai.lastVariationChange = 0;
-        
-        ai.lastVariationChange += deltaTime;
-        if (ai.lastVariationChange > 1.0 && Math.random() < 0.1) {
-            // Random speed variation (70-130%)
-            ai.moveSpeedMultiplier = 0.7 + Math.random() * 0.6;
-            ai.lastVariationChange = 0;
-        }
-        
-        // Check if near boundary and need to turn away
-        const avoidDirection = this.getAvoidBoundaryDirection(ai);
-        
-        let wanderDirection;
-        if (avoidDirection) {
-            // Turn away from boundary
-            wanderDirection = avoidDirection;
-            ai.wanderAngle = avoidDirection.angle();
-        } else {
-            // Normal wandering
-            wanderDirection = ai.getWanderDirection();
-        }
-        
-        // Add unstuck vector if AI is stuck (more aggressive)
-        if (ai.isStuck && ai.unstuckDirection) {
-            wanderDirection.add(ai.unstuckDirection.multiply(3));
-            wanderDirection.normalize();
-        }
-
-        // Lightweight local avoidance to reduce obstacle buzzing
-        this.steerAroundObstacles(ai, wanderDirection);
-        
-        // Set velocity for wandering with variation
-        const patrolSpeed = ai.moveSpeed * this.aiSpeedMultiplier * 0.5 * ai.moveSpeedMultiplier;
-        ai.velocity.x = wanderDirection.x * patrolSpeed;
-        ai.velocity.y = wanderDirection.y * patrolSpeed;
-        
-        // Update facing angle
-        if (ai.velocity.magnitude() > 0.1) {
-            ai.facingAngle = ai.velocity.angle();
-        }
-    }
-    
-    // Execute seek loot behavior
-    executeSeekLoot(ai, deltaTime) {
-        // Determine what we're seeking - health kit or weapon
-        const targetItem = ai.targetConsumable || ai.targetWeapon;
-        
-        if (!targetItem || (ai.targetWeapon && !ai.targetWeapon.active)) {
-            ai.setState('patrol');
-            ai.pickupAttemptStart = null;
-            ai.targetConsumable = null;
-            return;
-        }
-        
-        // Track pickup timeout to prevent getting stuck
-        if (!ai.pickupAttemptStart) {
-            ai.pickupAttemptStart = Date.now();
-        } else if (Date.now() - ai.pickupAttemptStart > 3000) {
-            // Been trying to pickup for 3+ seconds, give up
-            console.log(`AI ${ai.name} gave up on ${ai.targetConsumable ? 'consumable' : 'weapon'} pickup (timeout)`);
-            ai.setTargetWeapon(null);
-            ai.targetConsumable = null;
-            ai.pickupAttemptStart = null;
-            ai.setState('patrol');
-            return;
-        }
-        
-        // Move towards target item
-        this._scratchVector1.set(
-            targetItem.position.x - ai.position.x,
-            targetItem.position.y - ai.position.y
-        );
-        const direction = this._scratchVector1;
-        
-        const distance = direction.magnitude();
-        
-        // Try to pick up item if in range
-        if (distance < 30) {
-            if (ai.targetConsumable) {
-                // Try to pick up consumable
-                const consumable = ai.targetConsumable;
-                if (consumable.consumableType === 'healthKit' && ai.canCarryHealthKit()) {
-                    ai.addHealthKit();
-                    consumable.active = false;
-                    // Remove from game state
-                    const index = this.gameState.consumables.indexOf(consumable);
-                    if (index > -1) {
-                        this.gameState.consumables.splice(index, 1);
-                    }
-                    console.log(`AI ${ai.name} picked up health kit (now has ${ai.healthKits})`);
-                }
-                ai.targetConsumable = null;
-                ai.pickupAttemptStart = null;
-                ai.setState('patrol');
-                return;
-            } else if (ai.targetWeapon && ai.targetWeapon.isInRange(ai)) {
-                // Try to pick up weapon (with timer)
-                const pickupComplete = ai.targetWeapon.updatePickup(ai, deltaTime);
-                if (pickupComplete) {
-                    const success = this.pickupWeapon(ai, ai.targetWeapon);
-                    ai.setTargetWeapon(null);
-                    ai.pickupAttemptStart = null;
-                    ai.setState('patrol');
-                    return;
-                }
-            }
-        }
-        
-        // Move towards item if not in range yet
-        if (distance > 25) {
-            direction.normalize();
-
-            // Lightweight local avoidance to reduce obstacle buzzing
-            this.steerAroundObstacles(ai, direction);
-
-            const unarmedSprint = ai.weapons.length === 0 ? 1.25 : 1.0;
-            const moveSpeed = ai.moveSpeed * this.aiSpeedMultiplier * unarmedSprint;
-            ai.velocity.x = direction.x * moveSpeed;
-            ai.velocity.y = direction.y * moveSpeed;
-            ai.facingAngle = direction.angle();
-        } else {
-            // Stop moving when close enough to pickup
-            ai.velocity.x = 0;
-            ai.velocity.y = 0;
-        }
-    }
-    
-    // Check if AI is stuck and add unstuck behavior
-    checkIfStuck(ai, deltaTime) {
-        // Initialize stuck tracking if not present
-        if (!ai.lastPosition) {
-            ai.lastPosition = ai.position.clone();
-            ai.stuckTimer = 0;
-            ai.isStuck = false;
-            ai.unstuckDirection = null;
-            ai.unstuckTimer = 0;
-            ai.unstuckAttempts = 0;
-            return;
-        }
-        
-        // Check if AI has moved significantly
-        const distanceMoved = ai.position.distanceTo(ai.lastPosition);
-        const expectedMovement = ai.moveSpeed * this.aiSpeedMultiplier * deltaTime * 0.15; // More sensitive - expect at least 15% of speed
-        
-        if (distanceMoved < expectedMovement && ai.velocity.magnitude() > 0.5) {
-            // AI is trying to move but not moving much - likely stuck
-            ai.stuckTimer += deltaTime;
-            
-            if (ai.stuckTimer > 0.3 && !ai.isStuck) {
-                // Stuck for more than 0.3 seconds (reduced from 0.5)
-                ai.isStuck = true;
-                ai.unstuckTimer = 2.0; // Try to unstuck for 2 seconds (increased)
-                ai.unstuckAttempts++;
-                
-                // Generate a more aggressive unstuck direction
-                // Try moving perpendicular or opposite to current velocity
-                let unstuckAngle;
-                if (ai.unstuckAttempts % 3 === 0) {
-                    // Every 3rd attempt, try moving backward
-                    unstuckAngle = ai.velocity.angle() + Math.PI;
-                } else {
-                    // Otherwise try perpendicular with some randomness
-                    const perpOffset = (Math.random() - 0.5) * Math.PI * 0.5;
-                    unstuckAngle = ai.velocity.angle() + Math.PI / 2 + perpOffset;
-                }
-                
-                this._scratchVector1.set(
-                    Math.cos(unstuckAngle),
-                    Math.sin(unstuckAngle)
-                );
-                ai.unstuckDirection = this._scratchVector1.clone(); // Clone here as we need to store it
-                
-                console.log(`AI ${ai.name} is stuck (attempt ${ai.unstuckAttempts}), trying to unstuck at angle ${(unstuckAngle * 180 / Math.PI).toFixed(0)}°`);
-            }
-        } else {
-            // AI is moving normally - reset stuck timer
-            if (ai.stuckTimer > 0) {
-                ai.stuckTimer = Math.max(0, ai.stuckTimer - deltaTime * 2); // Decay faster when moving
-            }
-        }
-        
-        // Update unstuck timer
-        if (ai.isStuck) {
-            ai.unstuckTimer -= deltaTime;
-            if (ai.unstuckTimer <= 0) {
-                ai.isStuck = false;
-                ai.unstuckDirection = null;
-                ai.stuckTimer = 0;
-                console.log(`AI ${ai.name} unstuck attempt ended`);
-            }
-        }
-        
-        // Update last position
-        ai.lastPosition = ai.position.clone();
-    }
-    
-    // Execute combat behavior
-    executeCombat(ai, deltaTime) {
-        // Check if AI is stuck on obstacle
-        this.checkIfStuck(ai, deltaTime);
-        if (!ai.targetEnemy || ai.targetEnemy.isDead) {
-            ai.setState('patrol');
-            return;
-        }
-        
-        const distanceToEnemy = ai.position.distanceTo(ai.targetEnemy.position);
-        
-        // Move towards enemy if too far
-        if (distanceToEnemy > ai.combatRange * 0.7) {
-            this._scratchVector1.set(
-                ai.targetEnemy.position.x - ai.position.x,
-                ai.targetEnemy.position.y - ai.position.y
-            );
-            const direction = this._scratchVector1;
-            direction.normalize();
-            
-            // Add unstuck vector if AI is stuck (more aggressive)
-            if (ai.isStuck && ai.unstuckDirection) {
-                direction.add(ai.unstuckDirection.multiply(2.5));
-                direction.normalize();
-            }
-
-            // Lightweight local avoidance to reduce obstacle buzzing
-            this.steerAroundObstacles(ai, direction);
-            
-            ai.velocity.x = direction.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.8;
-            ai.velocity.y = direction.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.8;
-            ai.facingAngle = direction.angle();
-        }
-        // Keep distance if too close
-        else if (distanceToEnemy < ai.combatRange * 0.4) {
-            this._scratchVector1.set(
-                ai.position.x - ai.targetEnemy.position.x,
-                ai.position.y - ai.targetEnemy.position.y
-            );
-            const direction = this._scratchVector1;
-            direction.normalize();
-
-            // Lightweight local avoidance to reduce obstacle buzzing
-            this.steerAroundObstacles(ai, direction);
-            
-            ai.velocity.x = direction.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.6;
-            ai.velocity.y = direction.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.6;
-            ai.facingAngle = Math.atan2(
-                ai.targetEnemy.position.y - ai.position.y,
-                ai.targetEnemy.position.x - ai.position.x
-            );
-        }
-        // Stay in optimal range and strafe
-        else {
-            // Strafe movement
-            this._scratchVector2.set(
-                ai.targetEnemy.position.y - ai.position.y,
-                -(ai.targetEnemy.position.x - ai.position.x)
-            );
-            const perpendicular = this._scratchVector2;
-            perpendicular.normalize();
-
-            // Prefer a consistent strafe side per bot (reduces hive-mind feel)
-            const strafeSide = typeof ai.strafeSide === 'number' ? ai.strafeSide : 1;
-            perpendicular.multiply(strafeSide);
-
-            // Skill-based strafe strength
-            const strafeStrength = typeof ai.strafeStrength === 'number' ? ai.strafeStrength : 0.4;
-            perpendicular.multiply(strafeStrength / 0.4);
-
-            // Lightweight local avoidance to reduce obstacle buzzing
-            this.steerAroundObstacles(ai, perpendicular);
-            
-            ai.velocity.x = perpendicular.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.4;
-            ai.velocity.y = perpendicular.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.4;
-            ai.facingAngle = Math.atan2(
-                ai.targetEnemy.position.y - ai.position.y,
-                ai.targetEnemy.position.x - ai.position.x
-            );
-        }
-
-        // Try to use special ability (dash/slam) sometimes during combat
-        this.tryUseAbility(ai, deltaTime, ai.targetEnemy, distanceToEnemy, 'combat');
-        
-        // Try to fire weapon
-        this.tryFireWeapon(ai);
-    }
-    
-    // Execute move to safe zone behavior (Phase 6)
-    executeMoveToSafeZone(ai, deltaTime) {
-        // Check if AI is stuck on obstacle
-        this.checkIfStuck(ai, deltaTime);
-        if (!this.gameState.safeZoneSystem) {
-            ai.setState('patrol');
-            return;
-        }
-        
-        const safeZoneInfo = this.gameState.safeZoneSystem.getSafeZoneInfo();
-        
-        // Calculate direction to safe zone center (move to center, not just to edge)
-        this._scratchVector1.set(
-            safeZoneInfo.centerX - ai.position.x,
-            safeZoneInfo.centerY - ai.position.y
-        );
-        const directionToCenter = this._scratchVector1;
-        
-        const distanceToCenter = directionToCenter.magnitude();
-        
-        // Only switch back to patrol when near center (30% of radius from center)
-        // This ensures NPCs move to center, not just to edge
-        if (distanceToCenter <= safeZoneInfo.currentRadius * 0.3) {
-            ai.setState('patrol');
-            return;
-        }
-        
-        // Move at full speed towards safe zone center
-        directionToCenter.normalize();
-        
-        // Add unstuck vector if AI is stuck (more aggressive)
-        if (ai.isStuck && ai.unstuckDirection) {
-            directionToCenter.add(ai.unstuckDirection.multiply(2.5));
-            directionToCenter.normalize();
-        }
-
-        // Lightweight local avoidance to reduce obstacle buzzing
-        this.steerAroundObstacles(ai, directionToCenter);
-        
-        // Add urgency based on distance from safe zone edge
-        const distanceFromEdge = safeZoneInfo.currentRadius - distanceToCenter;
-        const urgencyMultiplier = distanceFromEdge < 0 ?
-            Math.min(2.0, 1.2 + Math.abs(distanceFromEdge) / safeZoneInfo.currentRadius) : 1.2;
-        
-        ai.velocity.x = directionToCenter.x * ai.moveSpeed * this.aiSpeedMultiplier * urgencyMultiplier;
-        ai.velocity.y = directionToCenter.y * ai.moveSpeed * this.aiSpeedMultiplier * urgencyMultiplier;
-        ai.facingAngle = directionToCenter.angle();
-        
-        // Still fire at enemies if they're in the way
-        if (ai.targetEnemy && ai.weapons.length > 0) {
-            this.tryFireWeapon(ai);
-        }
-    }
-    
-    // Execute flee behavior
-    executeFlee(ai, deltaTime) {
-        // Check if AI is stuck on obstacle
-        this.checkIfStuck(ai, deltaTime);
-        if (!ai.targetEnemy) {
-            ai.setState('patrol');
-            return;
-        }
-        
-        // Run away from enemy
-        this._scratchVector1.set(
-            ai.position.x - ai.targetEnemy.position.x,
-            ai.position.y - ai.targetEnemy.position.y
-        );
-        let fleeDirection = this._scratchVector1;
-        
-        // Check if near boundary and adjust flee direction
-        const avoidDirection = this.getAvoidBoundaryDirection(ai);
-        if (avoidDirection) {
-            // Blend flee direction with boundary avoidance
-            fleeDirection.add(avoidDirection.multiply(2)); // Weight boundary avoidance more
-        }
-        
-        // Also check if fleeing towards safe zone if outside
-        if (this.gameState.safeZoneSystem) {
-            const isOutside = this.gameState.safeZoneSystem.isOutsideZone(ai.position.x, ai.position.y);
-            if (isOutside) {
-                const safeZoneInfo = this.gameState.safeZoneSystem.getSafeZoneInfo();
-                this._scratchVector2.set(
-                    safeZoneInfo.centerX - ai.position.x,
-                    safeZoneInfo.centerY - ai.position.y
-                );
-                const toSafeZone = this._scratchVector2;
-                toSafeZone.normalize();
-                // Blend flee with moving to safe zone
-                fleeDirection.add(toSafeZone.multiply(1.5));
-            }
-        }
-        
-        fleeDirection.normalize();
-        
-        // Add unstuck vector if AI is stuck (more aggressive)
-        if (ai.isStuck && ai.unstuckDirection) {
-            fleeDirection.add(ai.unstuckDirection.multiply(2.5));
-            fleeDirection.normalize();
-        }
-
-        // Lightweight local avoidance to reduce obstacle buzzing
-        this.steerAroundObstacles(ai, fleeDirection);
-        
-        ai.velocity.x = fleeDirection.x * ai.moveSpeed * this.aiSpeedMultiplier; // Full speed when fleeing
-        ai.velocity.y = fleeDirection.y * ai.moveSpeed * this.aiSpeedMultiplier;
-        
-        // Face the enemy while fleeing (to shoot back)
-        ai.facingAngle = Math.atan2(
-            ai.targetEnemy.position.y - ai.position.y,
-            ai.targetEnemy.position.x - ai.position.x
-        );
-        
-        // Try to fire weapon while fleeing (fight back)
-        this.tryFireWeapon(ai);
-
-        // Bolt can dash to disengage; Boulder may slam if cornered.
-        const distanceToEnemy = ai.position.distanceTo(ai.targetEnemy.position);
-        this.tryUseAbility(ai, deltaTime, ai.targetEnemy, distanceToEnemy, 'flee');
-        
-        // If health recovered enough, return to combat
-        if (ai.getHealthPercentage() > ai.fleeHealthThreshold + 0.2) {
-            ai.setState('combat');
-        }
-    }
-    
-    // Try to fire weapon at target
-    tryFireWeapon(ai) {
-        if (!ai.targetEnemy || ai.weapons.length === 0) {
-            return;
-        }
-        
-        // Get active weapon
-        const weapon = ai.getActiveWeapon();
-        if (!weapon || !weapon.isReady()) {
-            // Try switching to a ready weapon
-            for (let i = 0; i < ai.weapons.length; i++) {
-                if (ai.weapons[i].isReady()) {
-                    ai.switchToWeapon(i);
-                    return; // Wait for next frame to fire
-                }
-            }
-            return;
-        }
-        
-        // Calculate aim angle with accuracy modifier
-        let aimAngle = Math.atan2(
-            ai.targetEnemy.position.y - ai.position.y,
-            ai.targetEnemy.position.x - ai.position.x
-        );
-        
-        // Add inaccuracy based on skill level
-        const inaccuracy = (1 - ai.aimAccuracy) * (Math.random() - 0.5) * 0.5;
-        aimAngle += inaccuracy;
-        
-        // Fire weapon through combat system
-        this.combatSystem.fireWeapon(ai, weapon, aimAngle);
-    }
-
-    // --- Navigation + ability helpers ---
-    steerAroundObstacles(ai, direction) {
-        if (!direction) return direction;
-
-        // Normalize input direction (without allocating)
-        const mag = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
-        if (mag < 0.0001) return direction;
-        let dirX = direction.x / mag;
-        let dirY = direction.y / mag;
-
-        const probeDistance = Math.max(12, ai.hitboxRadius + 10);
-
-        if (!this.wouldCollideAt(ai, ai.position.x + dirX * probeDistance, ai.position.y + dirY * probeDistance)) {
-            direction.x = dirX;
-            direction.y = dirY;
-            return direction;
-        }
-
-        const baseAngle = Math.atan2(dirY, dirX);
-        const offsets = [
-            Math.PI / 6,
-            -Math.PI / 6,
-            Math.PI / 3,
-            -Math.PI / 3,
-            Math.PI / 2,
-            -Math.PI / 2,
-            (Math.PI * 3) / 4,
-            (-Math.PI * 3) / 4,
-            Math.PI
-        ];
-
-        for (let i = 0; i < offsets.length; i++) {
-            const a = baseAngle + offsets[i];
-            const cx = Math.cos(a);
-            const cy = Math.sin(a);
-            if (!this.wouldCollideAt(ai, ai.position.x + cx * probeDistance, ai.position.y + cy * probeDistance)) {
-                direction.x = cx;
-                direction.y = cy;
-                return direction;
-            }
-        }
-
-        // If every probe collides, leave direction unchanged (unstuck logic will handle)
-        direction.x = dirX;
-        direction.y = dirY;
-        return direction;
-    }
-
-    wouldCollideAt(ai, x, y) {
-        const mapConfig = getCurrentMapConfig();
-        const radius = ai.hitboxRadius;
-
-        for (const obstacle of mapConfig.obstacles) {
-            const rectX = obstacle.position.x - obstacle.width / 2;
-            const rectY = obstacle.position.y - obstacle.height / 2;
-            if (circleRectCollision(x, y, radius, rectX, rectY, obstacle.width, obstacle.height)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    tryUseAbility(ai, deltaTime, targetEnemy, distanceToEnemy, context) {
-        if (!this.abilitySystem) return;
-        if (!ai || !ai.specialAbility || ai.specialAbilityCooldown > 0) return;
-        if (!targetEnemy || targetEnemy.isDead) return;
-
-        const chancePerSecond = typeof ai.abilityUseChancePerSecond === 'number' ? ai.abilityUseChancePerSecond : 0;
-        const rollChance = Math.max(0, chancePerSecond) * deltaTime;
-        if (rollChance <= 0) return;
-        if (Math.random() > rollChance) return;
-
-        const abilityType = ai.specialAbility.type;
-
-        if (abilityType === 'dash') {
-            const shouldDashToChase = context === 'combat' && distanceToEnemy > ai.combatRange * 0.85;
-            const shouldDashToEscape = context === 'flee' && distanceToEnemy < ai.combatRange * 0.55;
-            const shouldDashToUnstick = !!ai.isStuck;
-
-            if (shouldDashToChase || shouldDashToEscape || shouldDashToUnstick) {
-                this.abilitySystem.activateAbility(ai);
-            }
-            return;
-        }
-
-        if (abilityType === 'groundSlam') {
-            const slamRadius = 120;
-
-            // Use slam intentionally: only when target is within the effect radius.
-            if (distanceToEnemy <= slamRadius) {
-                this.abilitySystem.activateAbility(ai);
-            }
-        }
-    }
-    
-    // Find nearest weapon for AI
-    findNearestWeapon(ai, options = {}) {
-        const ignoreRange = !!options.ignoreRange;
-        if (this.availableWeapons.length === 0) {
-            ai.setTargetWeapon(null);
-            return;
-        }
-        
-        let nearestWeapon = null;
-        let nearestDistance = Infinity;
-
-        const maxDistance = ignoreRange ? Infinity : ai.perceptionRange;
-        
-        this.availableWeapons.forEach(weapon => {
-            if (!weapon.active) return;
-            
-            const config = weapon.getWeaponConfig();
-            
-            // Check if AI can actually pick up this weapon
-            if (!this.canPickupWeapon(ai, weapon)) {
-                return;
-            }
-            
-            const distance = ai.position.distanceTo(weapon.position);
-            if (distance < nearestDistance && distance < maxDistance) {
-                nearestDistance = distance;
-                nearestWeapon = weapon;
-            }
-        });
-        
-        if (nearestWeapon) {
-            ai.setTargetWeapon(nearestWeapon);
-        } else {
-            ai.setTargetWeapon(null);
-        }
-    }
-    
-    // Find nearest health kit for AI
-    findNearestHealthKit(ai) {
-        if (!this.gameState.consumables || this.gameState.consumables.length === 0) {
-            ai.targetConsumable = null;
-            return;
-        }
-        
-        let nearestHealthKit = null;
-        let nearestDistance = Infinity;
-        
-        this.gameState.consumables.forEach(consumable => {
-            if (!consumable.active || consumable.consumableType !== 'healthKit') return;
-            
-            const distance = ai.position.distanceTo(consumable.position);
-            if (distance < nearestDistance && distance < ai.perceptionRange) {
-                nearestDistance = distance;
-                nearestHealthKit = consumable;
-            }
-        });
-        
-        if (nearestHealthKit) {
-            ai.targetConsumable = nearestHealthKit;
-        } else {
-            ai.targetConsumable = null;
         }
     }
     
@@ -847,13 +153,6 @@ export class AISystem {
                 console.log(`AI ${ai.name} (${ai.aiSkillLevel}) used health kit, health now: ${ai.currentHP}/${ai.maxHP}`);
             }
         }
-    }
-    
-    // Check if AI can pickup a weapon (eligibility check)
-    canPickupWeapon(ai, weaponPickup) {
-        const config = weaponPickup.getWeaponConfig();
-        const result = ai.getWeaponPickupResult(config);
-        return result.ok;
     }
     
     // Pick up weapon
@@ -1005,28 +304,6 @@ export class AISystem {
     // Get available weapons for rendering
     getAvailableWeapons() {
         return this.availableWeapons.filter(w => w.active);
-    }
-    
-    // Get direction to avoid circular map boundaries
-    getAvoidBoundaryDirection(ai) {
-        const pos = ai.position;
-        const checkDistance = 200; // Start avoiding when within 200px of edge
-        
-        // Calculate distance from map center
-        const dx = pos.x - MAP_CONFIG.centerX;
-        const dy = pos.y - MAP_CONFIG.centerY;
-        const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
-        
-        // Check if close to boundary
-        if (distanceFromCenter > MAP_CONFIG.radius - checkDistance) {
-            // Push towards center
-            this._scratchVector3.set(-dx, -dy);
-            const avoidDirection = this._scratchVector3;
-            avoidDirection.normalize();
-            return avoidDirection;
-        }
-        
-        return null;
     }
     
     // Clear all AI data
