@@ -2,6 +2,8 @@
 
 import { CHARACTERS } from '../config/characters.js';
 import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
+import { META_CONFIG } from '../config/metaProgression.js';
+import { loadProfile, saveProfile, getXpProgress, purchaseUpgrade, checkRequirements, getUpgradeLevel } from '../core/ProfileStore.js';
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -13,6 +15,8 @@ export class StartScreen {
         // home: mode selection
         // solo: character + map selection + battle
         // multiplayer: placeholder (coming soon)
+        // upgrades: spend coins on upgrades
+        // profileStats: view lifetime stats
         this.menuState = 'home';
 
         // Solo selection flow
@@ -76,7 +80,8 @@ export class StartScreen {
         this.homeButtons = {
             solo: { x: this.canvas.width / 2, y: this.canvas.height * 0.46, width: 260 * scale, height: 54 * scale, text: 'SOLO' },
             multiplayer: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 74 * scale, width: 260 * scale, height: 54 * scale, text: 'MULTIPLAYER' },
-            editor: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'MAP EDITOR' }
+            upgrades: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'UPGRADES' },
+            editor: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 222 * scale, width: 260 * scale, height: 54 * scale, text: 'MAP EDITOR' }
         };
 
         // Back button (used on Solo + Multiplayer)
@@ -99,6 +104,15 @@ export class StartScreen {
         
         // Start requested flag
         this.startRequested = false;
+
+        // Meta profile (shared via localStorage)
+        this.profile = loadProfile();
+
+        // Render-time computed hit targets (Upgrades screen)
+        this.upgradesBuyButtons = [];
+
+        // Render-time computed hit targets (Home)
+        this.profileHudRect = null;
 
         // Per-map gameConfig overrides set from the menu settings
         this.mapGameConfigOverrides = new Map();
@@ -503,6 +517,13 @@ export class StartScreen {
 
         // Navigation states (home / multiplayer)
         if (this.menuState === 'home') {
+            if (this.profileHudRect) {
+                const r = this.profileHudRect;
+                if (coords.x >= r.x && coords.x <= r.x + r.w && coords.y >= r.y && coords.y <= r.y + r.h) {
+                    this.menuState = 'profileStats';
+                    return null;
+                }
+            }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.solo)) {
                 this.menuState = 'solo';
                 this.setSoloStep('character');
@@ -513,10 +534,42 @@ export class StartScreen {
                 this.menuState = 'multiplayer';
                 return null;
             }
+            if (this.isPointInButton(coords.x, coords.y, this.homeButtons.upgrades)) {
+                this.menuState = 'upgrades';
+                return null;
+            }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
                 window.location.href = 'editor.html';
                 return null;
             }
+            return null;
+        }
+
+        if (this.menuState === 'profileStats') {
+            if (this.isPointInButton(coords.x, coords.y, this.backButton)) {
+                this.menuState = 'home';
+            }
+            return null;
+        }
+
+        if (this.menuState === 'upgrades') {
+            if (this.isPointInButton(coords.x, coords.y, this.backButton)) {
+                this.menuState = 'home';
+                return null;
+            }
+
+            for (const btn of this.upgradesBuyButtons) {
+                if (!btn) continue;
+                if (coords.x >= btn.x && coords.x <= btn.x + btn.w && coords.y >= btn.y && coords.y <= btn.y + btn.h) {
+                    this.profile = loadProfile();
+                    const res = purchaseUpgrade(this.profile, btn.upgradeId);
+                    if (res.ok) {
+                        saveProfile(this.profile);
+                    }
+                    return null;
+                }
+            }
+
             return null;
         }
 
@@ -628,6 +681,13 @@ export class StartScreen {
 
         // Navigation states (home / multiplayer)
         if (this.menuState === 'home') {
+            if (this.profileHudRect) {
+                const r = this.profileHudRect;
+                if (coords.x >= r.x && coords.x <= r.x + r.w && coords.y >= r.y && coords.y <= r.y + r.h) {
+                    this.menuState = 'profileStats';
+                    return null;
+                }
+            }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.solo)) {
                 this.menuState = 'solo';
                 return null;
@@ -636,10 +696,42 @@ export class StartScreen {
                 this.menuState = 'multiplayer';
                 return null;
             }
+            if (this.isPointInButton(coords.x, coords.y, this.homeButtons.upgrades)) {
+                this.menuState = 'upgrades';
+                return null;
+            }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
                 window.location.href = 'editor.html';
                 return null;
             }
+            return null;
+        }
+
+        if (this.menuState === 'profileStats') {
+            if (this.isPointInButton(coords.x, coords.y, this.backButton)) {
+                this.menuState = 'home';
+            }
+            return null;
+        }
+
+        if (this.menuState === 'upgrades') {
+            if (this.isPointInButton(coords.x, coords.y, this.backButton)) {
+                this.menuState = 'home';
+                return null;
+            }
+
+            for (const btn of this.upgradesBuyButtons) {
+                if (!btn) continue;
+                if (coords.x >= btn.x && coords.x <= btn.x + btn.w && coords.y >= btn.y && coords.y <= btn.y + btn.h) {
+                    this.profile = loadProfile();
+                    const res = purchaseUpgrade(this.profile, btn.upgradeId);
+                    if (res.ok) {
+                        saveProfile(this.profile);
+                    }
+                    return null;
+                }
+            }
+
             return null;
         }
 
@@ -751,7 +843,7 @@ export class StartScreen {
         const titleSize = Math.max(28, 42 * scale);
         const instructionSize = Math.max(11, 14 * scale);
         
-        // Large top logo (Home/Solo/Multiplayer)
+        // Large top logo (Home/Solo/Multiplayer/Upgrades)
         if (this.assetLoader && this.assetLoader.getImage('intro_logo')) {
             this.renderLogo();
         } else {
@@ -772,6 +864,12 @@ export class StartScreen {
             ctx.fillStyle = '#888888';
             ctx.textAlign = 'center';
             ctx.fillText('Multiplayer is first-class — coming soon', this.canvas.width / 2, this.instructionY);
+        } else if (this.menuState === 'profileStats') {
+            this.renderBackButton();
+            this.renderProfileStatsScreen();
+        } else if (this.menuState === 'upgrades') {
+            this.renderBackButton();
+            this.renderUpgradesScreen();
         } else {
             // Solo
             this.renderBackButton();
@@ -823,9 +921,270 @@ export class StartScreen {
 
         ctx.save();
 
+        // Refresh profile so post-match rewards show immediately.
+        this.profile = loadProfile();
+
+        this.renderHomeProfileHud();
+
         this.renderMenuButton(this.homeButtons.solo, '#4ade80');
         this.renderMenuButton(this.homeButtons.multiplayer, '#60a5fa');
+        this.renderMenuButton(this.homeButtons.upgrades, '#e5e7eb', '#111827');
         this.renderMenuButton(this.homeButtons.editor, '#fbbf24');
+
+        ctx.restore();
+    }
+
+    renderHomeProfileHud() {
+        const ctx = this.ctx;
+        const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
+
+        const profile = this.profile;
+        if (!profile) {
+            this.profileHudRect = null;
+            return;
+        }
+
+        const pad = 14 * scale;
+        const w = Math.min(this.canvas.width * 0.78, 520);
+        const h = Math.max(64 * scale, 54);
+
+        const x = (this.canvas.width - w) / 2;
+        const y = Math.max((this.logoBottomY || this.titleY) + 10 * scale, 74 * scale);
+
+        this.profileHudRect = { x, y, w, h };
+
+        ctx.save();
+        ctx.fillStyle = '#e5e7eb';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        this.roundRect(ctx, x, y, w, h, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        const xpInfo = getXpProgress(profile.xp);
+        const xpIntoLevel = profile.xp - xpInfo.currentLevelXp;
+        const xpNeeded = Math.max(0, xpInfo.nextLevelXp - xpInfo.currentLevelXp);
+
+        ctx.fillStyle = '#111827';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold ${Math.max(14, 16 * scale)}px Arial`;
+
+        const leftX = x + 16 * scale;
+        const midY = y + h / 2;
+        ctx.fillText(`🏅 Lv ${xpInfo.level}`, leftX, midY - 12 * scale);
+        ctx.fillText(`🪙 ${profile.coins}`, leftX + w * 0.34, midY - 12 * scale);
+        ctx.font = `${Math.max(12, 14 * scale)}px Arial`;
+        ctx.fillText(`✨ ${xpIntoLevel}/${xpNeeded} XP`, leftX, midY + 12 * scale);
+
+        // Progress bar
+        const barX = leftX + w * 0.34;
+        const barY = midY + 6 * scale;
+        const barW = x + w - barX - 16 * scale;
+        const barH = Math.max(8 * scale, 8);
+        ctx.fillStyle = 'rgba(17, 24, 39, 0.15)';
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = 'rgba(17, 24, 39, 0.45)';
+        ctx.fillRect(barX, barY, barW * xpInfo.progress01, barH);
+
+        ctx.restore();
+    }
+
+    renderProfileStatsScreen() {
+        const ctx = this.ctx;
+        const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
+
+        // Refresh profile so it reflects latest rewards/upgrades.
+        this.profile = loadProfile();
+        const profile = this.profile;
+
+        const topY = (this.logoBottomY || this.titleY) + 34 * scale;
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.max(22, 28 * scale)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Profile', this.canvas.width / 2, topY);
+
+        if (!profile) {
+            ctx.font = `${Math.max(14, 16 * scale)}px Arial`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fillText('No profile found.', this.canvas.width / 2, topY + 40 * scale);
+            ctx.restore();
+            return;
+        }
+
+        const panelW = Math.min(this.canvas.width * 0.9, 640);
+        const panelH = Math.min(this.canvas.height * 0.65, 520);
+        const panelX = (this.canvas.width - panelW) / 2;
+        const panelY = topY + 26 * scale;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, panelX, panelY, panelW, panelH, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        const xpInfo = getXpProgress(profile.xp);
+        const xpIntoLevel = profile.xp - xpInfo.currentLevelXp;
+        const xpNeeded = Math.max(0, xpInfo.nextLevelXp - xpInfo.currentLevelXp);
+
+        const lifetime = profile.stats || {};
+        const lines = [
+            `🏅 Level: ${xpInfo.level}`,
+            `✨ XP: ${profile.xp}  (${xpIntoLevel}/${xpNeeded} this level)`,
+            `🪙 Coins: ${profile.coins}`,
+            '',
+            `🎮 Matches: ${lifetime.matchesPlayed ?? 0}`,
+            `🏆 Wins: ${lifetime.wins ?? 0}`,
+            `⚔️ Kills: ${lifetime.kills ?? 0}`,
+            `💥 Damage dealt: ${Math.round(lifetime.damageDealt ?? 0)}`,
+            `🩸 Damage taken: ${Math.round(lifetime.damageTaken ?? 0)}`,
+            `🧰 Heals used: ${lifetime.healsConsumed ?? 0}`,
+            `🛡️ Shields used: ${lifetime.shieldsUsed ?? 0}`,
+            `✨ Ability uses: ${lifetime.abilityUsedCount ?? 0}`,
+            `🤝 Friendly revives: ${lifetime.friendlyRevives ?? 0}`,
+            `🔫 Shots fired: ${lifetime.weaponFiredCount ?? 0}`,
+            `🥇 Best placement: ${lifetime.bestPlacement ?? '—'}`
+        ];
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `${Math.max(14, 16 * scale)}px Arial`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+
+        const startX = panelX + 18 * scale;
+        let y = panelY + 34 * scale;
+        const lineH = 24 * scale;
+        for (const line of lines) {
+            ctx.fillText(line, startX, y);
+            y += lineH;
+            if (y > panelY + panelH - 18 * scale) break;
+        }
+
+        ctx.restore();
+    }
+
+    renderUpgradesScreen() {
+        const ctx = this.ctx;
+        const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
+
+        // Reset cached buy button bounds each render
+        this.upgradesBuyButtons = [];
+
+        // Refresh profile so post-match rewards show immediately after returning to menu
+        this.profile = loadProfile();
+
+        const centerX = this.canvas.width / 2;
+        const topY = (this.logoBottomY || this.titleY) + 40 * scale;
+
+        // Title
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.max(22, 28 * scale)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Upgrades', centerX, topY);
+
+        // Level + currencies
+        const xpInfo = getXpProgress(this.profile.xp);
+        const infoY = topY + 40 * scale;
+        ctx.font = `${Math.max(14, 18 * scale)}px Arial`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(`Level ${xpInfo.level}  •  XP ${this.profile.xp}  •  Coins ${this.profile.coins}`, centerX, infoY);
+
+        // XP bar
+        const barW = Math.min(this.canvas.width * 0.76, 520);
+        const barH = Math.max(10 * scale, 8);
+        const barX = centerX - barW / 2;
+        const barY = infoY + 16 * scale;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillRect(barX, barY, barW * xpInfo.progress01, barH);
+        ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.fillText(`${xpInfo.currentLevelXp} → ${xpInfo.nextLevelXp}`, centerX, barY + barH + 14 * scale);
+
+        // Upgrade list
+        const listTop = barY + 48 * scale;
+        const rowH = Math.max(70 * scale, 56);
+        const rowW = Math.min(this.canvas.width * 0.86, 620);
+        const rowX = centerX - rowW / 2;
+        const upgrades = Object.values(META_CONFIG.catalog.upgrades || {});
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        for (let i = 0; i < upgrades.length; i++) {
+            const upgrade = upgrades[i];
+            const y = listTop + i * (rowH + 14 * scale);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = 2;
+            this.roundRect(ctx, rowX, y, rowW, rowH, 14);
+            ctx.fill();
+            ctx.stroke();
+
+            const ownedLevel = getUpgradeLevel(this.profile, upgrade.id);
+            const nextLevel = ownedLevel + 1;
+            const nextDef = (upgrade.levels || []).find(l => l.index === nextLevel) || null;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${Math.max(14, 18 * scale)}px Arial`;
+            ctx.fillText(`${upgrade.displayName}  (Lv ${ownedLevel}/${(upgrade.levels || []).length})`, rowX + 18 * scale, y + 26 * scale);
+
+            ctx.font = `${Math.max(11, 14 * scale)}px Arial`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fillText(upgrade.description || '', rowX + 18 * scale, y + 48 * scale);
+
+            // Buy button
+            const btnW = Math.max(110 * scale, 96);
+            const btnH = Math.max(40 * scale, 34);
+            const btnX = rowX + rowW - btnW - 16 * scale;
+            const btnY = y + (rowH - btnH) / 2;
+
+            let canBuy = false;
+            let blockedReason = null;
+            let btnLabel = 'MAX';
+
+            if (nextDef) {
+                btnLabel = `BUY ${nextDef.cost}`;
+                const req = checkRequirements(this.profile, nextDef.requirements);
+                if (!req.ok) {
+                    blockedReason = req.reason;
+                } else if (this.profile.coins < nextDef.cost) {
+                    blockedReason = 'not_enough_coins';
+                } else {
+                    canBuy = true;
+                }
+            }
+
+            ctx.fillStyle = canBuy ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.08)';
+            ctx.strokeStyle = canBuy ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.14)';
+            ctx.lineWidth = 2;
+            this.roundRect(ctx, btnX, btnY, btnW, btnH, 12);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = canBuy ? '#ffffff' : 'rgba(255, 255, 255, 0.6)';
+            ctx.font = `bold ${Math.max(12, 14 * scale)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(btnLabel, btnX + btnW / 2, btnY + btnH / 2);
+
+            if (nextDef && !canBuy && blockedReason) {
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'alphabetic';
+                ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+                const hint = blockedReason === 'requires_xp'
+                    ? 'Need more XP'
+                    : (blockedReason === 'requires_level' ? 'Need higher level' : (blockedReason === 'not_enough_coins' ? 'Need more coins' : 'Locked'));
+                ctx.fillText(hint, btnX - 10 * scale, y + rowH - 12 * scale);
+            }
+
+            this.upgradesBuyButtons.push({ upgradeId: upgrade.id, x: btnX, y: btnY, w: btnW, h: btnH });
+        }
 
         ctx.restore();
     }

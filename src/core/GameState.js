@@ -17,9 +17,16 @@ export class GameState {
         
         // Match end info
         this.matchEndReason = null; // 'playerDied', 'playerWon', 'timeout'
+        this.matchRewards = null; // { xpEarned: number, coinsEarned: number }
         this.matchStats = {
             kills: 0,
             damageDealt: 0,
+            damageTaken: 0,
+            healsConsumed: 0,
+            shieldsUsed: 0,
+            abilityUsedCount: 0,
+            friendlyRevives: 0,
+            weaponFiredCount: 0,
             survivalTime: 0,
             finalPlacement: 0
         };
@@ -132,6 +139,30 @@ export class GameState {
     // Add damage to player stats
     addDamage(amount) {
         this.matchStats.damageDealt += amount;
+    }
+
+    addDamageTaken(amount) {
+        this.matchStats.damageTaken += amount;
+    }
+
+    addHealConsumed() {
+        this.matchStats.healsConsumed++;
+    }
+
+    addShieldUsed() {
+        this.matchStats.shieldsUsed++;
+    }
+
+    addAbilityUsed() {
+        this.matchStats.abilityUsedCount++;
+    }
+
+    addFriendlyRevive() {
+        this.matchStats.friendlyRevives++;
+    }
+
+    addWeaponFired() {
+        this.matchStats.weaponFiredCount++;
     }
 
     // Reset the game state

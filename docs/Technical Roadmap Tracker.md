@@ -350,25 +350,25 @@ Constraints:
 - No account system.
 - Storage is local (LocalStorage / IndexedDB). “Secure” is not the goal; “not trivially breakable” is a bonus.
 
-- [ ] Define player profile schema (versioned)
+- [x] Define player profile schema (versioned)
   - User story: As the game, I can evolve saved data without breaking old players.
   - Acceptance:
     - `profileVersion` exists and migrations are supported.
     - Stores XP, coins, unlocked items, and basic stats.
 
-- [ ] Award XP/coins from match results
+- [x] Award XP/coins from match results
   - User story: As a player, finishing matches earns progression.
   - Acceptance:
     - XP/coins computed from placement + kills + survival time (simple rules).
     - Persisted after match end.
 
-- [ ] Add upgrade framework (data-driven)
+- [x] Add upgrade framework (data-driven)
   - User story: As a designer/dev, I can add upgrades without rewriting systems.
   - Acceptance:
     - Upgrade definitions live in config.
     - Applying upgrades modifies character/weapon parameters in a controlled way.
 
-- [ ] Add minimal “Store/Upgrades” UI entry
+- [x] Add minimal “Store/Upgrades” UI entry
   - User story: As a player, I can spend coins.
   - Acceptance:
     - UI allows buying at least one upgrade.
@@ -376,8 +376,20 @@ Constraints:
 
 Milestone Completion Notes (fill in when done):
 - Summary:
+- Added a versioned local profile (`battle2death.profile`) that tracks **XP**, **coins**, purchase state for **upgrades/items**, and lifetime stats.
+- Match-end now awards **coins from placement only**, and **XP from kills + damage dealt** (no survival-time rewards).
+- Added a minimal canvas **Upgrades** screen in the StartScreen (Home → Upgrades) that lets you buy the first shipped upgrade: **Toughness** (MAX HP %, diminishing returns).
+- Expanded match stats tracking (damage taken, heals, shields, abilities, shots fired, etc.) to enable future analytics dashboards with minimal runtime overhead.
 - Files touched:
+  - [src/config/metaProgression.js](../src/config/metaProgression.js)
+  - [src/core/ProfileStore.js](../src/core/ProfileStore.js)
+  - [src/core/GameState.js](../src/core/GameState.js)
+  - [src/main.js](../src/main.js)
+  - [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
 - Key decisions:
+  - Levels are cosmetic; **total XP is the source of truth** (`getLevelForXp(...)` derives the level so we can rebalance later).
+  - Rewards avoid survival time (cheat-prone): **coins = placement**, **XP = kills + damage dealt** (revives supported in schema now; will activate once multiplayer revives exist).
+  - Upgrades/items use a shared **requirements** model (supports XP/level and stat gates) so future content can be authored in config.
 
 ## Milestone 7 — Multiplayer (P2P, no servers) (P0 but gated by decisions)
 Goal: Real multiplayer with no game servers, evolving from “works” to “robust”.
@@ -451,6 +463,5 @@ Milestone Completion Notes (fill in when done):
 ### Low hanging fruit: 
 - [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
 - [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
-- [] Game Over Screen: left align the came over stats
-- [] Map settings: Make settings in map selection (start screen) more clickable. right now its too small.
+- [] Refactor: refactor codebase to use templates/components where it makes sense. no single file should be over 1000 lines.
 

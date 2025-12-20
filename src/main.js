@@ -25,6 +25,7 @@ import { MAP_CONFIG, loadMapFromJSON, getCurrentMapConfig, getGameConfig } from 
 import { generateAISkills, generateAICharacterTypes, generateWeaponTier } from './config/gameConfig.js';
 import { Vector2D } from './utils/Vector2D.js';
 import { resolveMapsUrl, warnMissingAsset } from './utils/assetUrl.js';
+import { loadProfile, saveProfile, computeMatchRewards, recordMatchToProfile, getMaxHpMultiplierFromUpgrades } from './core/ProfileStore.js';
 
 class Game {
     constructor() {
@@ -80,6 +81,10 @@ class Game {
         
         // Setup start screen interaction
         this.setupStartScreenInteraction();
+
+        // Meta progression
+        this.profile = loadProfile();
+        this.rewardsAwarded = false;
     }
     
     setupStartScreenInteraction() {
@@ -163,6 +168,9 @@ class Game {
         
         // Setup event listeners for stats tracking
         this.setupEventListeners();
+
+        // Reset reward guard for the new match
+        this.rewardsAwarded = false;
         
         // Initialize game with selected character
         await this.init();
@@ -181,12 +189,49 @@ class Game {
             if (data.attacker && data.attacker.isPlayer) {
                 this.gameState.addDamage(data.damage);
             }
+
+            // Track damage taken by the player
+            if (data.target && data.target.isPlayer) {
+                this.gameState.addDamageTaken(data.damage);
+            }
         });
 
         // Track kills only when player actually gets the kill
         this.eventBus.on('characterKilled', (data) => {
             if (data.attacker && data.attacker.isPlayer && data.target && !data.target.isPlayer) {
                 this.gameState.addKill();
+            }
+        });
+
+        this.eventBus.on('healthKitUsed', (data) => {
+            if (data.character && data.character.isPlayer) {
+                this.gameState.addHealConsumed();
+            }
+        });
+
+        this.eventBus.on('consumablePickedUp', (data) => {
+            if (data.character && data.character.isPlayer && data.consumableType === 'shieldPotion') {
+                // Shield potions are consumed immediately on pickup.
+                this.gameState.addShieldUsed();
+            }
+        });
+
+        this.eventBus.on('abilityUsed', (data) => {
+            if (data.character && data.character.isPlayer) {
+                this.gameState.addAbilityUsed();
+            }
+        });
+
+        this.eventBus.on('weaponFired', (data) => {
+            if (data.character && data.character.isPlayer) {
+                this.gameState.addWeaponFired();
+            }
+        });
+
+        // Safe zone damage isn't emitted as characterDamaged; capture it separately.
+        this.eventBus.on('zoneDamage', (data) => {
+            if (data.character && data.character.isPlayer) {
+                this.gameState.addDamageTaken(data.damage);
             }
         });
     }
@@ -285,6 +330,15 @@ class Game {
         // Create player character with selected character type
         const characterConfig = { ...CHARACTERS[this.selectedCharacter], isPlayer: true };
         const player = new Player(characterConfig);
+
+        // Apply progression upgrades (works across match types by applying to any human-controlled player)
+        // Keep base stats intact for future recalculation.
+        const maxHpMultiplier = getMaxHpMultiplierFromUpgrades(this.profile);
+        if (Number.isFinite(maxHpMultiplier) && maxHpMultiplier > 0) {
+            player.progressionBaseMaxHP = player.progressionBaseMaxHP || player.maxHP;
+            player.maxHP = player.progressionBaseMaxHP * maxHpMultiplier;
+            player.currentHP = player.maxHP;
+        }
 
         // Spawn all players (human + bots) spread across the map with safety constraints
         const totalCharactersToSpawn = gameConfig.match.aiCount + 1;
@@ -537,6 +591,29 @@ class Game {
         
         // Check match end conditions (Phase 6)
         this.gameState.checkMatchEnd();
+
+        // Award meta rewards exactly once when the match ends.
+        if (!this.rewardsAwarded && (this.gameState.phase === 'gameOver' || this.gameState.phase === 'victory')) {
+            this.rewardsAwarded = true;
+
+            const rewards = computeMatchRewards(this.gameState.matchStats);
+            this.gameState.matchRewards = {
+                xpEarned: rewards.xpEarned,
+                coinsEarned: rewards.coinsEarned
+            };
+            this.profile.xp += rewards.xpEarned;
+            this.profile.coins += rewards.coinsEarned;
+
+            recordMatchToProfile(this.profile, this.gameState.matchStats, {
+                character: this.selectedCharacter || null,
+                map: this.selectedMap?.name || this.selectedMap?.file || null
+            });
+
+            saveProfile(this.profile);
+
+            console.log('=== META REWARDS ===');
+            console.log(`XP +${rewards.xpEarned}, Coins +${rewards.coinsEarned}`);
+        }
     }
 
     // Check if player can pickup weapons (with timer)

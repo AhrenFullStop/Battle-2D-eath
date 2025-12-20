@@ -377,11 +377,21 @@ export class UIRenderer {
         ctx.fillText(`💥 Damage: ${Math.round(stats.damageDealt)}`, statsX, statsY + lineHeight * 2);
         ctx.fillText(`⏱️ Survival: ${Math.floor(stats.survivalTime)}s`, statsX, statsY + lineHeight * 3);
 
+        // Rewards earned (meta progression)
+        if (gameState.matchRewards) {
+            const r = gameState.matchRewards;
+            const rewardsText = `🎁 Rewards: +${r.xpEarned} XP  •  +${r.coinsEarned} Coins`;
+            ctx.font = `${Math.max(14, 16 * scale)}px Arial`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fillText(rewardsText, statsX, statsY + lineHeight * 4);
+        }
+
         // Return to Menu button
         const buttonWidth = Math.min(340 * scale, this.canvas.width * 0.75);
         const buttonHeight = Math.max(56 * scale, 44);
         const buttonX = centerX - buttonWidth / 2;
-        const buttonY = statsBoxY + statsBoxHeight + 30 * scale;
+        const buttonExtraOffset = gameState.matchRewards ? (18 * scale) : 0;
+        const buttonY = statsBoxY + statsBoxHeight + 30 * scale + buttonExtraOffset;
         const buttonRadius = 14;
 
         this.matchEndUI.returnToMenuButton = {
