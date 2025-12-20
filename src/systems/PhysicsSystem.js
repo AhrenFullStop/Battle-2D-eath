@@ -3,6 +3,7 @@
 import { Vector2D } from '../utils/Vector2D.js';
 import { FRICTION } from '../config/constants.js';
 import { getCurrentMapConfig, getGameConfig, clampToMapBounds } from '../config/map.js';
+import { circleRectCollision } from '../utils/collision.js';
 
 export class PhysicsSystem {
     constructor(gameState) {
@@ -109,7 +110,7 @@ export class PhysicsSystem {
     checkObstacleCollision(character) {
         const mapConfig = getCurrentMapConfig();
         for (const obstacle of mapConfig.obstacles) {
-            if (this.circleRectCollision(
+            if (circleRectCollision(
                 character.position.x,
                 character.position.y,
                 character.hitboxRadius,
@@ -122,17 +123,6 @@ export class PhysicsSystem {
             }
         }
         return false;
-    }
-
-    // Circle-rectangle collision detection
-    circleRectCollision(circleX, circleY, radius, rectX, rectY, rectWidth, rectHeight) {
-        const closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
-        const closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
-        
-        const dx = circleX - closestX;
-        const dy = circleY - closestY;
-        
-        return (dx * dx + dy * dy) < (radius * radius);
     }
 
     // Check if character is in water

@@ -1,4 +1,5 @@
 import { META_CONFIG } from '../config/metaProgression.js';
+import { safeJsonParse } from '../utils/jsonHelpers.js';
 
 let cachedProfile = null;
 
@@ -26,14 +27,6 @@ function createDefaultProfile() {
         },
         history: []
     };
-}
-
-function safeParseJson(text) {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return null;
-    }
 }
 
 export function migrateProfile(raw) {
@@ -85,7 +78,7 @@ export function loadProfile() {
     if (cachedProfile) return cachedProfile;
 
     const key = META_CONFIG.storage.profileKey;
-    const raw = safeParseJson(localStorage.getItem(key));
+    const raw = safeJsonParse(localStorage.getItem(key));
     cachedProfile = migrateProfile(raw);
     return cachedProfile;
 }

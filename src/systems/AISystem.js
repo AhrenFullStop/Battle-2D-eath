@@ -6,6 +6,7 @@ import { Consumable } from '../entities/Consumable.js';
 import { createWeapon } from '../config/weapons.js';
 import { createConsumable } from '../config/consumables.js';
 import { MAP_CONFIG, getCurrentMapConfig, getGameConfig } from '../config/map.js';
+import { circleRectCollision } from '../utils/collision.js';
 
 export class AISystem {
     constructor(gameState, eventBus, combatSystem, abilitySystem = null) {
@@ -699,19 +700,11 @@ export class AISystem {
         for (const obstacle of mapConfig.obstacles) {
             const rectX = obstacle.position.x - obstacle.width / 2;
             const rectY = obstacle.position.y - obstacle.height / 2;
-            if (this.circleRectCollision(x, y, radius, rectX, rectY, obstacle.width, obstacle.height)) {
+            if (circleRectCollision(x, y, radius, rectX, rectY, obstacle.width, obstacle.height)) {
                 return true;
             }
         }
         return false;
-    }
-
-    circleRectCollision(circleX, circleY, radius, rectX, rectY, rectWidth, rectHeight) {
-        const closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
-        const closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
-        const dx = circleX - closestX;
-        const dy = circleY - closestY;
-        return dx * dx + dy * dy < radius * radius;
     }
 
     tryUseAbility(ai, deltaTime, targetEnemy, distanceToEnemy, context) {

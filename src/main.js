@@ -28,6 +28,7 @@ import { resolveMapsUrl, warnMissingAsset } from './utils/assetUrl.js';
 import { loadProfile, saveProfile, computeMatchRewards, recordMatchToProfile, getMaxHpMultiplierFromUpgrades } from './core/ProfileStore.js';
 import { createMulberry32 } from './net/prng.js';
 import { LockstepSession2P } from './net/LockstepSession2P.js';
+import { getCanvasCoordinates } from './utils/canvasHelpers.js';
 
 class Game {
     constructor() {
@@ -366,28 +367,18 @@ class Game {
         });
     }
 
-    getCanvasCoordinates(clientX, clientY) {
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
-        };
-    }
-
     handleEndScreenTouchEnd(event) {
         if (!this.gameState || this.gameState.phase === 'playing') return;
         if (!event.changedTouches || event.changedTouches.length === 0) return;
 
         const touch = event.changedTouches[0];
-        const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
+        const coords = getCanvasCoordinates(this.canvas, touch.clientX, touch.clientY);
         this.tryHandleReturnToMenu(coords.x, coords.y);
     }
 
     handleEndScreenMouseUp(event) {
         if (!this.gameState || this.gameState.phase === 'playing') return;
-        const coords = this.getCanvasCoordinates(event.clientX, event.clientY);
+        const coords = getCanvasCoordinates(this.canvas, event.clientX, event.clientY);
         this.tryHandleReturnToMenu(coords.x, coords.y);
     }
 

@@ -6,6 +6,7 @@ import { ConsumableButton } from '../renderer/ConsumableButton.js';
 import { AbilityButton } from '../renderer/AbilityButton.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants.js';
+import { getCanvasCoordinates } from '../utils/canvasHelpers.js';
 
 export class InputSystem {
     constructor(canvas, eventBus, assetLoader = null) {
@@ -117,14 +118,7 @@ export class InputSystem {
 
     // Get canvas-relative coordinates from touch/mouse event
     getCanvasCoordinates(clientX, clientY) {
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        
-        return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
-        };
+        return getCanvasCoordinates(this.canvas, clientX, clientY);
     }
 
     // Handle touch start

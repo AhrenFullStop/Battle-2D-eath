@@ -1,5 +1,7 @@
 // Manual offer/answer WebRTC connection (copy/paste SDP) for static-site multiplayer.
 
+import { safeJsonParse } from '../utils/jsonHelpers.js';
+
 const PROTOCOL_VERSION = 1;
 
 function delay(ms) {
@@ -29,14 +31,6 @@ async function waitForIceGatheringComplete(pc, timeoutMs = 8000) {
     }
 
     pc.removeEventListener('icegatheringstatechange', onState);
-}
-
-function safeJsonParse(str) {
-    try {
-        return { ok: true, value: JSON.parse(str) };
-    } catch (e) {
-        return { ok: false, error: e };
-    }
 }
 
 export function getOptionalPublicStunIceServers() {
@@ -92,8 +86,8 @@ export class WebRTCManualConnection {
         channel.addEventListener('message', (e) => {
             if (typeof this.onMessage !== 'function') return;
             const parsed = safeJsonParse(e.data);
-            if (!parsed.ok) return;
-            this.onMessage(parsed.value);
+            if (!parsed) return;
+            this.onMessage(parsed);
         });
     }
 
@@ -139,8 +133,8 @@ export class WebRTCManualConnection {
 
         this.setStatus('setting-answer');
         const parsed = safeJsonParse(answerCode);
-        if (!parsed.ok) throw new Error('Invalid answer code (must be JSON)');
-        const { type, sdp } = parsed.value || {};
+        if (!parsed) throw new Error('Invalid answer code (must be JSON)');
+        const { type, sdp } = parsed || {};
         if (type !== 'answer' || typeof sdp !== 'string') throw new Error('Invalid answer payload');
 
         await this.pc.setRemoteDescription({ type, sdp });
@@ -152,8 +146,8 @@ export class WebRTCManualConnection {
 
         this.setStatus('setting-offer');
         const parsed = safeJsonParse(offerCode);
-        if (!parsed.ok) throw new Error('Invalid offer code (must be JSON)');
-        const { type, sdp } = parsed.value || {};
+        if (!parsed) throw new Error('Invalid offer code (must be JSON)');
+        const { type, sdp } = parsed || {};
         if (type !== 'offer' || typeof sdp !== 'string') throw new Error('Invalid offer payload');
 
         await this.pc.setRemoteDescription({ type, sdp });

@@ -3,6 +3,7 @@
 import { WeaponEffect, Projectile, DamageNumber } from '../entities/Weapon.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { MAP_CONFIG } from '../config/map.js';
+import { circleRectCollision } from '../utils/collision.js';
 
 export class CombatSystem {
     constructor(gameState, eventBus) {
@@ -199,7 +200,7 @@ export class CombatSystem {
             const rectX = obstacle.position.x - obstacle.width / 2;
             const rectY = obstacle.position.y - obstacle.height / 2;
             
-            if (this.circleRectCollision(
+            if (circleRectCollision(
                 projectile.position.x,
                 projectile.position.y,
                 projectile.radius,
@@ -212,17 +213,6 @@ export class CombatSystem {
             }
         }
         return false;
-    }
-
-    // Circle-rectangle collision detection
-    circleRectCollision(circleX, circleY, radius, rectX, rectY, rectWidth, rectHeight) {
-        const closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
-        const closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
-        
-        const dx = circleX - closestX;
-        const dy = circleY - closestY;
-        
-        return (dx * dx + dy * dy) < (radius * radius);
     }
 
     // Check projectile collisions with characters
