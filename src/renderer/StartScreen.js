@@ -1158,12 +1158,15 @@ export class StartScreen {
         ctx.fillText('⚙ Settings', padX, settingsY);
 
         // Store hit rect for clicking
-        const m = ctx.measureText('⚙ Settings');
+        // Make this a comfortable tap target (mobile-first): full-row width + ~44px height.
+        const tapPaddingX = 10 * scale;
+        const tapPaddingTop = 10 * scale;
+        const tapHeight = Math.max(44 * scale, bodySize * 2.2);
         this.mapSettingsHitRect = {
-            x: padX,
-            y: settingsY - bodySize,
-            w: Math.max(90 * scale, m.width),
-            h: Math.max(18 * scale, bodySize * 1.6)
+            x: panelX + tapPaddingX,
+            y: settingsY - tapPaddingTop,
+            w: panelW - tapPaddingX * 2,
+            h: tapHeight
         };
 
         ctx.restore();

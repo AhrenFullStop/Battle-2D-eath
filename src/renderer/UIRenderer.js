@@ -355,21 +355,27 @@ export class UIRenderer {
         // Match stats title
         ctx.font = `bold ${statsTitleSize}px Arial`;
         ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
         ctx.fillText('Match Statistics', centerX, centerY - 10 * scale);
-        
-        // Stats
+
+        // Stats (left-aligned inside the box)
         const stats = gameState.matchStats;
         ctx.font = `${statsTextSize}px Arial`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+
+        const statsX = statsBoxX + 28 * scale;
         const statsY = centerY + 30 * scale;
-        
+
         // Placement with color coding
         ctx.fillStyle = stats.finalPlacement === 1 ? '#fbbf24' : '#ffffff';
-        ctx.fillText(`🏅 Placement: #${stats.finalPlacement}`, centerX, statsY);
-        
+        ctx.fillText(`🏅 Placement: #${stats.finalPlacement}`, statsX, statsY);
+
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`⚔️ Kills: ${stats.kills}`, centerX, statsY + lineHeight);
-        ctx.fillText(`💥 Damage: ${Math.round(stats.damageDealt)}`, centerX, statsY + lineHeight * 2);
-        ctx.fillText(`⏱️ Survival: ${Math.floor(stats.survivalTime)}s`, centerX, statsY + lineHeight * 3);
+        ctx.fillText(`⚔️ Kills: ${stats.kills}`, statsX, statsY + lineHeight);
+        ctx.fillText(`💥 Damage: ${Math.round(stats.damageDealt)}`, statsX, statsY + lineHeight * 2);
+        ctx.fillText(`⏱️ Survival: ${Math.floor(stats.survivalTime)}s`, statsX, statsY + lineHeight * 3);
 
         // Return to Menu button
         const buttonWidth = Math.min(340 * scale, this.canvas.width * 0.75);
