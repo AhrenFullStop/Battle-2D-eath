@@ -267,41 +267,58 @@ Goal: Bots become the fun engine: more opponents, fewer dumb moments, varied ski
 Notes:
 - Current AI is state-machine based but lacks robust navigation and ability usage.
 - Current gameplay uses randomness in several places; we’ll need to control that for multiplayer later.
+- Spawning: Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
+- Bots and Gameplay: add a slight bounce from rocks to make them easier to navigate around, this will improve bot path finding too.
 
-- [ ] AI obstacle navigation upgrade (lightweight)
+- [x] AI research notes (in-doc)
+  - User story: As a dev team, we have researched and curated a list of approaches to borrow from.
+  - Acceptance:
+    - Add a short section to this doc with links/keywords/approaches.
+    - Include what was tried and what was rejected.
+
+- [x] AI obstacle navigation upgrade (lightweight)
   - User story: As a player, bots don’t get stuck on rocks and can route around obstacles.
   - Acceptance:
     - Bots no longer “buzz” against obstacles for extended periods.
     - Pathing remains lightweight (no heavy grid search per bot per frame unless optimized).
 
-- [ ] Add ability usage for AI (dash/slam)
+- [x] Add ability usage for AI (dash/slam)
   - User story: As a player, bots use abilities sometimes and it changes fights.
   - Acceptance:
     - At least one skill tier uses abilities intentionally.
     - Cooldowns and existing ability rules are respected.
 
-- [ ] Implement skill profiles (aim, aggression, reaction time)
+- [x] Implement skill profiles (aim, aggression, reaction time)
   - User story: As a player, I face distinct bot personalities.
   - Acceptance:
     - Novice/intermediate/expert feel meaningfully different.
     - Skill distribution remains configurable in game config.
 
-- [ ] Increase bot counts safely
-  - User story: As a player, I can play higher-pop matches on capable devices.
-  - Acceptance:
-    - Bot count becomes a configurable map/game setting.
-    - Performance remains acceptable (no severe stutters).
+### AI research notes (what we borrowed)
+- **Local steering / “feels smart” without heavy pathfinding:** lightweight obstacle avoidance via short forward probes and angular fallbacks (common in boids/steering behaviors).
+- **Stuck detection:** track “trying to move but not moving” and temporarily bias movement away/perpendicular (simple heuristic; avoids per-frame grid searches).
+- **Skill as knobs, not branches:** aim, reaction time, aggression, and ability usage exposed as profile values.
 
-- [ ] AI research notes (in-doc)
-  - User story: As future agents, we have a curated list of approaches to borrow.
-  - Acceptance:
-    - Add a short section to this doc with links/keywords/approaches.
-    - Include what was tried and what was rejected.
+### AI research notes (what we rejected for now)
+- **Per-bot A\* / grid navmesh each frame:** too heavy for the current perf budget and would need caching + careful invalidation.
+- **Full visibility / line-of-sight queries:** nice-to-have, but requires more geometry + raycasting complexity.
+- **Predictive leading aim:** would change weapon feel a lot; revisit after multiplayer determinism work.
 
 Milestone Completion Notes (fill in when done):
 - Summary:
+- Bots now slide along obstacles (physics) and also steer around obstacles (AI) to prevent extended “buzzing” against rocks.
+- AI uses data-driven **skill profiles** (aim accuracy, reaction time, aggression, strafing strength, ability cadence) so novice/intermediate/expert feel distinct.
+- AI will occasionally use character abilities intentionally: Bolt dashes to chase/escape/unstick; Boulder ground-slams when in range.
 - Files touched:
+- [src/config/gameConfig.js](../src/config/gameConfig.js)
+- [src/entities/AICharacter.js](../src/entities/AICharacter.js)
+- [src/systems/AISystem.js](../src/systems/AISystem.js)
+- [src/systems/PhysicsSystem.js](../src/systems/PhysicsSystem.js)
+- [src/main.js](../src/main.js)
 - Key decisions:
+- Navigation stays **lightweight**: forward probe + a few angular fallbacks, plus existing stuck logic (no grid search).
+- Skill profiles live in game config (`gameConfig.ai.skillProfiles`) and are passed into AI instances at spawn time.
+- Ability usage respects existing cooldowns by reusing `AbilitySystem.activateAbility(...)`.
 
 ## Milestone 5 — Map Editor: mobile-first, menu-accessible, content pipeline (P1)
 Goal: Creating and shipping maps becomes easy and fun.
@@ -441,11 +458,11 @@ Milestone Completion Notes (fill in when done):
 
 
 (ignore) Notes:
-- Weapon Pickup: If a few (2+) bots sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
+- Weapon Pickup: If a few (2+) bots (or even the player and a bot) sit on a weapon, nobody gets it. The weapon is never picked up. we have to fix that, a winner should be determined.
 - Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
 - Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
-- Spawning: Spawn points suck. player is always spawning in same place, bots always from edge. needs to be smarter
 - Game Over Screen: left align the came over stats
-- Bots and Gameplay: add a slight bounce from rocks to make them easier to navigate around, this will improve bot path finding too.
 - Basics: add a favicon
-- CI/CD: Change deployment to automatically add a version counter. Display version on bottom of 
+- CI/CD: Change deployment to automatically add a version counter. Display version on bottom of start screen
+- Start Map Selection: Make settings in map selection more clickable
+

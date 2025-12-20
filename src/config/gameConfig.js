@@ -8,6 +8,16 @@
  */
 export function getDefaultGameConfig() {
     return {
+        // Movement tuning
+        movement: {
+            // Multiplier applied to player input velocity (kept as 2.5 by default)
+            inputSpeedMultiplier: 2.5,
+            // Multiplier applied to the player's base movement speed
+            playerSpeedMultiplier: 1.0,
+            // Multiplier applied to AI intent velocity so bots aren't dramatically slower than the player
+            aiSpeedMultiplier: 2.2
+        },
+
         // Match settings
         match: {
             aiCount: 7,              // Number of AI opponents (current default)
@@ -59,6 +69,41 @@ export function getDefaultGameConfig() {
             characterDistribution: {
                 bolt: 0.5,     // 50% Bolt (fast, low HP)
                 boulder: 0.5   // 50% Boulder (slow, high HP)
+            },
+
+            // Skill profiles (tuning knobs) used by AI.
+            // Values are intentionally conservative to avoid dramatic difficulty swings.
+            // Units:
+            // - reactionTimeSeconds: seconds between AI decision updates
+            // - perceptionRange: world units
+            // - aimAccuracy: 0..1 (used as a dispersion scalar)
+            // - aggression: 0..1 (higher = more willing to fight / less likely to flee)
+            // - abilityUseChancePerSecond: 0..1 (roll each second while in combat)
+            skillProfiles: {
+                novice: {
+                    reactionTimeSeconds: 0.8,
+                    perceptionRange: 250,
+                    aimAccuracy: 0.6,
+                    aggression: 0.35,
+                    strafeStrength: 0.35,
+                    abilityUseChancePerSecond: 0.08
+                },
+                intermediate: {
+                    reactionTimeSeconds: 0.45,
+                    perceptionRange: 350,
+                    aimAccuracy: 0.8,
+                    aggression: 0.6,
+                    strafeStrength: 0.45,
+                    abilityUseChancePerSecond: 0.14
+                },
+                expert: {
+                    reactionTimeSeconds: 0.25,
+                    perceptionRange: 450,
+                    aimAccuracy: 0.95,
+                    aggression: 0.8,
+                    strafeStrength: 0.55,
+                    abilityUseChancePerSecond: 0.22
+                }
             }
         }
     };
@@ -80,6 +125,11 @@ export function validateGameConfig(config) {
     
     // Deep merge with defaults
     const validated = {
+        movement: {
+            inputSpeedMultiplier: Math.max(0.5, Math.min(5, config.movement?.inputSpeedMultiplier ?? defaultConfig.movement.inputSpeedMultiplier)),
+            playerSpeedMultiplier: Math.max(0.5, Math.min(5, config.movement?.playerSpeedMultiplier ?? defaultConfig.movement.playerSpeedMultiplier)),
+            aiSpeedMultiplier: Math.max(0.5, Math.min(5, config.movement?.aiSpeedMultiplier ?? defaultConfig.movement.aiSpeedMultiplier))
+        },
         match: {
             aiCount: Math.max(1, Math.min(50, config.match?.aiCount ?? defaultConfig.match.aiCount)),
             targetDuration: Math.max(60, config.match?.targetDuration ?? defaultConfig.match.targetDuration)
@@ -99,7 +149,8 @@ export function validateGameConfig(config) {
         },
         ai: {
             skillDistribution: config.ai?.skillDistribution ?? defaultConfig.ai.skillDistribution,
-            characterDistribution: config.ai?.characterDistribution ?? defaultConfig.ai.characterDistribution
+            characterDistribution: config.ai?.characterDistribution ?? defaultConfig.ai.characterDistribution,
+            skillProfiles: config.ai?.skillProfiles ?? defaultConfig.ai.skillProfiles
         }
     };
     

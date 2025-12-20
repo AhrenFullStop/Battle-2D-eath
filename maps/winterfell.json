@@ -1674,6 +1674,11 @@
     }
   ],
   "gameConfig": {
+    "movement": {
+      "inputSpeedMultiplier": 2.5,
+      "playerSpeedMultiplier": 1.0,
+      "aiSpeedMultiplier": 2.2
+    },
     "match": {
       "aiCount": 15,
       "targetDuration": 600

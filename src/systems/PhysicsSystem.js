@@ -2,7 +2,7 @@
 
 import { Vector2D } from '../utils/Vector2D.js';
 import { FRICTION } from '../config/constants.js';
-import { getCurrentMapConfig, clampToMapBounds } from '../config/map.js';
+import { getCurrentMapConfig, getGameConfig, clampToMapBounds } from '../config/map.js';
 
 export class PhysicsSystem {
     constructor(gameState) {
@@ -41,17 +41,23 @@ export class PhysicsSystem {
         // Store old position for collision resolution
         const oldX = character.position.x;
         const oldY = character.position.y;
-        
-        // Update position based on velocity (with water slowdown)
-        character.position.x += character.velocity.x * deltaTime * waterSpeedMultiplier;
-        character.position.y += character.velocity.y * deltaTime * waterSpeedMultiplier;
-        
-        // Check obstacle collisions
+
+        const deltaX = character.velocity.x * deltaTime * waterSpeedMultiplier;
+        const deltaY = character.velocity.y * deltaTime * waterSpeedMultiplier;
+
+        // Axis-separated movement for lightweight sliding along obstacles.
+        // This prevents characters from getting fully stuck on corners.
+        character.position.x = oldX + deltaX;
+        character.position.y = oldY;
         if (this.checkObstacleCollision(character)) {
-            // Revert to old position if colliding with obstacle
             character.position.x = oldX;
+            character.velocity.x = 0;
+        }
+
+        character.position.y = oldY + deltaY;
+        if (this.checkObstacleCollision(character)) {
             character.position.y = oldY;
-            character.velocity.set(0, 0);
+            character.velocity.y = 0;
         }
         
         // Apply circular map boundary
@@ -73,7 +79,10 @@ export class PhysicsSystem {
             const magnitude = inputVector.magnitude();
             if (magnitude > 0) {
                 inputVector.normalize();
-                inputVector.multiply(character.moveSpeed * 2.5); // Slightly boost speed for responsiveness
+                const gameConfig = getGameConfig();
+                const inputSpeedMultiplier = gameConfig.movement?.inputSpeedMultiplier ?? 2.5;
+                const playerSpeedMultiplier = gameConfig.movement?.playerSpeedMultiplier ?? 1.0;
+                inputVector.multiply(character.moveSpeed * playerSpeedMultiplier * inputSpeedMultiplier);
                 character.velocity.set(inputVector.x, inputVector.y);
             }
         }

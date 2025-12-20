@@ -8,16 +8,18 @@ import { createConsumable } from '../config/consumables.js';
 import { MAP_CONFIG, getCurrentMapConfig, getGameConfig } from '../config/map.js';
 
 export class AISystem {
-    constructor(gameState, eventBus, combatSystem) {
+    constructor(gameState, eventBus, combatSystem, abilitySystem = null) {
         this.gameState = gameState;
         this.eventBus = eventBus;
         this.combatSystem = combatSystem;
+        this.abilitySystem = abilitySystem;
+        const gameConfig = getGameConfig();
+        this.aiSpeedMultiplier = gameConfig.movement?.aiSpeedMultiplier ?? 2.2;
         
         // Available weapons for AI to pick up
         this.availableWeapons = [];
         
         // Max weapons allowed on map (from game config)
-        const gameConfig = getGameConfig();
         this.maxWeapons = gameConfig.loot.maxWeaponsOnMap;
         
         // Listen for character death events
@@ -107,31 +109,76 @@ export class AISystem {
             this.findNearestHealthKit(ai);
         }
         
-        // Look for nearby weapons if AI doesn't have max weapons and not currently targeting one
-        if (ai.weapons.length < ai.maxWeapons && !ai.targetWeapon) {
-            this.findNearestWeapon(ai);
+        // Weapon seeking:
+        // - If unarmed: aggressively seek the nearest weapon anywhere on the map.
+        // - If armed: only consider nearby upgrades (keeps priorities sane).
+        if (!ai.targetWeapon) {
+            if (ai.weapons.length === 0) {
+                this.findNearestWeapon(ai, { ignoreRange: true });
+            } else if (ai.weapons.length < ai.maxWeapons) {
+                this.findNearestWeapon(ai, { ignoreRange: false });
+            }
         }
     }
     
     // Make decision about what to do
     makeDecision(ai) {
-        // Check if outside safe zone
-        const isOutsideSafeZone = this.gameState.safeZoneSystem &&
-            this.gameState.safeZoneSystem.isOutsideZone(ai.position.x, ai.position.y);
-        
-        // Priority 0: Get to safe zone if outside (highest priority!)
-        if (isOutsideSafeZone) {
+        const safeZoneSystem = this.gameState.safeZoneSystem;
+        const hasSafeZone = !!safeZoneSystem;
+        const isOutsideSafeZone = hasSafeZone && safeZoneSystem.isOutsideZone(ai.position.x, ai.position.y);
+
+        // Priority 0: Avoid safe zone BEFORE taking damage, but not at all costs.
+        // If we're close to the edge and the zone is shrinking or a phase is imminent, bias toward moving inward.
+        let shouldPreemptSafeZone = false;
+        if (hasSafeZone) {
+            const info = safeZoneSystem.getSafeZoneInfo();
+            const dx = ai.position.x - info.centerX;
+            const dy = ai.position.y - info.centerY;
+            const distToCenter = Math.sqrt(dx * dx + dy * dy);
+            const distanceFromEdge = info.currentRadius - distToCenter;
+            const timeUntilNextMs = typeof safeZoneSystem.getTimeUntilNextPhase === 'function' ? safeZoneSystem.getTimeUntilNextPhase() : 0;
+
+            const buffer = Math.max(90, Math.min(180, info.currentRadius * 0.09));
+            const phaseSoon = timeUntilNextMs > 0 && timeUntilNextMs < 9000;
+            const riskRising = info.isShrinking || phaseSoon || info.currentDamage > 0;
+
+            if (distanceFromEdge < buffer && riskRising) {
+                shouldPreemptSafeZone = true;
+
+                // Not at all costs: if we're already engaged in close combat and healthy, keep fighting.
+                if (ai.targetEnemy && ai.weapons.length > 0) {
+                    const dEnemy = ai.position.distanceTo(ai.targetEnemy.position);
+                    const engagedClose = dEnemy < ai.combatRange * 0.75;
+                    if (engagedClose && ai.getHealthPercentage() > ai.fleeHealthThreshold + 0.15) {
+                        shouldPreemptSafeZone = false;
+                    }
+                }
+            }
+        }
+
+        if (isOutsideSafeZone || shouldPreemptSafeZone) {
             ai.setState('moveToSafeZone');
             return;
         }
+
+        // Priority 1: If unarmed, aggressively loot until we have at least 1 weapon.
+        if (ai.weapons.length === 0) {
+            if (ai.targetWeapon && ai.targetWeapon.active) {
+                ai.setState('seekLoot');
+                return;
+            }
+            // Fall back to patrol if no weapons exist (should be rare)
+            ai.setState('patrol');
+            return;
+        }
         
-        // Priority 1: Flee if low health
+        // Priority 2: Flee if low health
         if (ai.shouldFlee()) {
             ai.setState('flee');
             return;
         }
         
-        // Priority 2: Seek health kit if damaged and found one
+        // Priority 3: Seek health kit if damaged and found one
         const needsHealing = ai.currentHP < ai.maxHP * 0.5; // Below 50% health
         const hasRoomForHealthKit = ai.healthKits < ai.maxHealthKits;
         if (needsHealing && hasRoomForHealthKit && ai.targetConsumable) {
@@ -139,13 +186,13 @@ export class AISystem {
             return;
         }
         
-        // Priority 3: Combat if enemy detected and has weapon
+        // Priority 4: Combat if enemy detected and has weapon
         if (ai.targetEnemy && ai.weapons.length > 0) {
             ai.setState('combat');
             return;
         }
         
-        // Priority 4: Seek weapon if don't have max weapons and found a target
+        // Priority 5: Seek weapon if don't have max weapons and found a target
         if (ai.weapons.length < ai.maxWeapons && ai.targetWeapon && ai.targetWeapon.active) {
             ai.setState('seekLoot');
             return;
@@ -189,9 +236,12 @@ export class AISystem {
             wanderDirection.add(ai.unstuckDirection.multiply(3));
             wanderDirection.normalize();
         }
+
+        // Lightweight local avoidance to reduce obstacle buzzing
+        this.steerAroundObstacles(ai, wanderDirection);
         
         // Set velocity for wandering with variation
-        const patrolSpeed = ai.moveSpeed * 0.5 * ai.moveSpeedMultiplier;
+        const patrolSpeed = ai.moveSpeed * this.aiSpeedMultiplier * 0.5 * ai.moveSpeedMultiplier;
         ai.velocity.x = wanderDirection.x * patrolSpeed;
         ai.velocity.y = wanderDirection.y * patrolSpeed;
         
@@ -269,8 +319,14 @@ export class AISystem {
         // Move towards item if not in range yet
         if (distance > 25) {
             direction.normalize();
-            ai.velocity.x = direction.x * ai.moveSpeed;
-            ai.velocity.y = direction.y * ai.moveSpeed;
+
+            // Lightweight local avoidance to reduce obstacle buzzing
+            this.steerAroundObstacles(ai, direction);
+
+            const unarmedSprint = ai.weapons.length === 0 ? 1.25 : 1.0;
+            const moveSpeed = ai.moveSpeed * this.aiSpeedMultiplier * unarmedSprint;
+            ai.velocity.x = direction.x * moveSpeed;
+            ai.velocity.y = direction.y * moveSpeed;
             ai.facingAngle = direction.angle();
         } else {
             // Stop moving when close enough to pickup
@@ -294,7 +350,7 @@ export class AISystem {
         
         // Check if AI has moved significantly
         const distanceMoved = ai.position.distanceTo(ai.lastPosition);
-        const expectedMovement = ai.moveSpeed * deltaTime * 0.15; // More sensitive - expect at least 15% of speed
+        const expectedMovement = ai.moveSpeed * this.aiSpeedMultiplier * deltaTime * 0.15; // More sensitive - expect at least 15% of speed
         
         if (distanceMoved < expectedMovement && ai.velocity.magnitude() > 0.5) {
             // AI is trying to move but not moving much - likely stuck
@@ -371,9 +427,12 @@ export class AISystem {
                 direction.add(ai.unstuckDirection.multiply(2.5));
                 direction.normalize();
             }
+
+            // Lightweight local avoidance to reduce obstacle buzzing
+            this.steerAroundObstacles(ai, direction);
             
-            ai.velocity.x = direction.x * ai.moveSpeed * 0.8;
-            ai.velocity.y = direction.y * ai.moveSpeed * 0.8;
+            ai.velocity.x = direction.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.8;
+            ai.velocity.y = direction.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.8;
             ai.facingAngle = direction.angle();
         }
         // Keep distance if too close
@@ -383,9 +442,12 @@ export class AISystem {
                 ai.position.y - ai.targetEnemy.position.y
             );
             direction.normalize();
+
+            // Lightweight local avoidance to reduce obstacle buzzing
+            this.steerAroundObstacles(ai, direction);
             
-            ai.velocity.x = direction.x * ai.moveSpeed * 0.6;
-            ai.velocity.y = direction.y * ai.moveSpeed * 0.6;
+            ai.velocity.x = direction.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.6;
+            ai.velocity.y = direction.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.6;
             ai.facingAngle = Math.atan2(
                 ai.targetEnemy.position.y - ai.position.y,
                 ai.targetEnemy.position.x - ai.position.x
@@ -399,14 +461,28 @@ export class AISystem {
                 -(ai.targetEnemy.position.x - ai.position.x)
             );
             perpendicular.normalize();
+
+            // Prefer a consistent strafe side per bot (reduces hive-mind feel)
+            const strafeSide = typeof ai.strafeSide === 'number' ? ai.strafeSide : 1;
+            perpendicular.multiply(strafeSide);
+
+            // Skill-based strafe strength
+            const strafeStrength = typeof ai.strafeStrength === 'number' ? ai.strafeStrength : 0.4;
+            perpendicular.multiply(strafeStrength / 0.4);
+
+            // Lightweight local avoidance to reduce obstacle buzzing
+            this.steerAroundObstacles(ai, perpendicular);
             
-            ai.velocity.x = perpendicular.x * ai.moveSpeed * 0.4;
-            ai.velocity.y = perpendicular.y * ai.moveSpeed * 0.4;
+            ai.velocity.x = perpendicular.x * ai.moveSpeed * this.aiSpeedMultiplier * 0.4;
+            ai.velocity.y = perpendicular.y * ai.moveSpeed * this.aiSpeedMultiplier * 0.4;
             ai.facingAngle = Math.atan2(
                 ai.targetEnemy.position.y - ai.position.y,
                 ai.targetEnemy.position.x - ai.position.x
             );
         }
+
+        // Try to use special ability (dash/slam) sometimes during combat
+        this.tryUseAbility(ai, deltaTime, ai.targetEnemy, distanceToEnemy, 'combat');
         
         // Try to fire weapon
         this.tryFireWeapon(ai);
@@ -446,14 +522,17 @@ export class AISystem {
             directionToCenter.add(ai.unstuckDirection.multiply(2.5));
             directionToCenter.normalize();
         }
+
+        // Lightweight local avoidance to reduce obstacle buzzing
+        this.steerAroundObstacles(ai, directionToCenter);
         
         // Add urgency based on distance from safe zone edge
         const distanceFromEdge = safeZoneInfo.currentRadius - distanceToCenter;
         const urgencyMultiplier = distanceFromEdge < 0 ?
             Math.min(2.0, 1.2 + Math.abs(distanceFromEdge) / safeZoneInfo.currentRadius) : 1.2;
         
-        ai.velocity.x = directionToCenter.x * ai.moveSpeed * urgencyMultiplier;
-        ai.velocity.y = directionToCenter.y * ai.moveSpeed * urgencyMultiplier;
+        ai.velocity.x = directionToCenter.x * ai.moveSpeed * this.aiSpeedMultiplier * urgencyMultiplier;
+        ai.velocity.y = directionToCenter.y * ai.moveSpeed * this.aiSpeedMultiplier * urgencyMultiplier;
         ai.facingAngle = directionToCenter.angle();
         
         // Still fire at enemies if they're in the way
@@ -506,9 +585,12 @@ export class AISystem {
             fleeDirection.add(ai.unstuckDirection.multiply(2.5));
             fleeDirection.normalize();
         }
+
+        // Lightweight local avoidance to reduce obstacle buzzing
+        this.steerAroundObstacles(ai, fleeDirection);
         
-        ai.velocity.x = fleeDirection.x * ai.moveSpeed; // Full speed when fleeing
-        ai.velocity.y = fleeDirection.y * ai.moveSpeed;
+        ai.velocity.x = fleeDirection.x * ai.moveSpeed * this.aiSpeedMultiplier; // Full speed when fleeing
+        ai.velocity.y = fleeDirection.y * ai.moveSpeed * this.aiSpeedMultiplier;
         
         // Face the enemy while fleeing (to shoot back)
         ai.facingAngle = Math.atan2(
@@ -518,6 +600,10 @@ export class AISystem {
         
         // Try to fire weapon while fleeing (fight back)
         this.tryFireWeapon(ai);
+
+        // Bolt can dash to disengage; Boulder may slam if cornered.
+        const distanceToEnemy = ai.position.distanceTo(ai.targetEnemy.position);
+        this.tryUseAbility(ai, deltaTime, ai.targetEnemy, distanceToEnemy, 'flee');
         
         // If health recovered enough, return to combat
         if (ai.getHealthPercentage() > ai.fleeHealthThreshold + 0.2) {
@@ -557,9 +643,113 @@ export class AISystem {
         // Fire weapon through combat system
         this.combatSystem.fireWeapon(ai, weapon, aimAngle);
     }
+
+    // --- Navigation + ability helpers ---
+    steerAroundObstacles(ai, direction) {
+        if (!direction) return direction;
+
+        // Normalize input direction (without allocating)
+        const mag = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+        if (mag < 0.0001) return direction;
+        let dirX = direction.x / mag;
+        let dirY = direction.y / mag;
+
+        const probeDistance = Math.max(12, ai.hitboxRadius + 10);
+
+        if (!this.wouldCollideAt(ai, ai.position.x + dirX * probeDistance, ai.position.y + dirY * probeDistance)) {
+            direction.x = dirX;
+            direction.y = dirY;
+            return direction;
+        }
+
+        const baseAngle = Math.atan2(dirY, dirX);
+        const offsets = [
+            Math.PI / 6,
+            -Math.PI / 6,
+            Math.PI / 3,
+            -Math.PI / 3,
+            Math.PI / 2,
+            -Math.PI / 2,
+            (Math.PI * 3) / 4,
+            (-Math.PI * 3) / 4,
+            Math.PI
+        ];
+
+        for (let i = 0; i < offsets.length; i++) {
+            const a = baseAngle + offsets[i];
+            const cx = Math.cos(a);
+            const cy = Math.sin(a);
+            if (!this.wouldCollideAt(ai, ai.position.x + cx * probeDistance, ai.position.y + cy * probeDistance)) {
+                direction.x = cx;
+                direction.y = cy;
+                return direction;
+            }
+        }
+
+        // If every probe collides, leave direction unchanged (unstuck logic will handle)
+        direction.x = dirX;
+        direction.y = dirY;
+        return direction;
+    }
+
+    wouldCollideAt(ai, x, y) {
+        const mapConfig = getCurrentMapConfig();
+        const radius = ai.hitboxRadius;
+
+        for (const obstacle of mapConfig.obstacles) {
+            const rectX = obstacle.position.x - obstacle.width / 2;
+            const rectY = obstacle.position.y - obstacle.height / 2;
+            if (this.circleRectCollision(x, y, radius, rectX, rectY, obstacle.width, obstacle.height)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    circleRectCollision(circleX, circleY, radius, rectX, rectY, rectWidth, rectHeight) {
+        const closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
+        const closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
+        const dx = circleX - closestX;
+        const dy = circleY - closestY;
+        return dx * dx + dy * dy < radius * radius;
+    }
+
+    tryUseAbility(ai, deltaTime, targetEnemy, distanceToEnemy, context) {
+        if (!this.abilitySystem) return;
+        if (!ai || !ai.specialAbility || ai.specialAbilityCooldown > 0) return;
+        if (!targetEnemy || targetEnemy.isDead) return;
+
+        const chancePerSecond = typeof ai.abilityUseChancePerSecond === 'number' ? ai.abilityUseChancePerSecond : 0;
+        const rollChance = Math.max(0, chancePerSecond) * deltaTime;
+        if (rollChance <= 0) return;
+        if (Math.random() > rollChance) return;
+
+        const abilityType = ai.specialAbility.type;
+
+        if (abilityType === 'dash') {
+            const shouldDashToChase = context === 'combat' && distanceToEnemy > ai.combatRange * 0.85;
+            const shouldDashToEscape = context === 'flee' && distanceToEnemy < ai.combatRange * 0.55;
+            const shouldDashToUnstick = !!ai.isStuck;
+
+            if (shouldDashToChase || shouldDashToEscape || shouldDashToUnstick) {
+                this.abilitySystem.activateAbility(ai);
+            }
+            return;
+        }
+
+        if (abilityType === 'groundSlam') {
+            const slamRadius = 120;
+
+            // Use slam intentionally: only when target is within the effect radius.
+            if (distanceToEnemy <= slamRadius) {
+                this.abilitySystem.activateAbility(ai);
+            }
+        }
+    }
     
     // Find nearest weapon for AI
-    findNearestWeapon(ai) {
+    findNearestWeapon(ai, options = {}) {
+        const ignoreRange = !!options.ignoreRange;
         if (this.availableWeapons.length === 0) {
             ai.setTargetWeapon(null);
             return;
@@ -567,6 +757,8 @@ export class AISystem {
         
         let nearestWeapon = null;
         let nearestDistance = Infinity;
+
+        const maxDistance = ignoreRange ? Infinity : ai.perceptionRange;
         
         this.availableWeapons.forEach(weapon => {
             if (!weapon.active) return;
@@ -579,7 +771,7 @@ export class AISystem {
             }
             
             const distance = ai.position.distanceTo(weapon.position);
-            if (distance < nearestDistance && distance < ai.perceptionRange) {
+            if (distance < nearestDistance && distance < maxDistance) {
                 nearestDistance = distance;
                 nearestWeapon = weapon;
             }

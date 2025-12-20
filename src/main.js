@@ -147,8 +147,8 @@ class Game {
         this.physicsSystem = new PhysicsSystem(this.gameState);
         this.combatSystem = new CombatSystem(this.gameState, this.eventBus);
         this.safeZoneSystem = new SafeZoneSystem(this.gameState, this.eventBus);
-        this.aiSystem = new AISystem(this.gameState, this.eventBus, this.combatSystem);
         this.abilitySystem = new AbilitySystem(this.gameState, this.eventBus, this.combatSystem);
+        this.aiSystem = new AISystem(this.gameState, this.eventBus, this.combatSystem, this.abilitySystem);
         this.cameraSystem = new CameraSystem(CANVAS_WIDTH, CANVAS_HEIGHT);
         this.renderer = new Renderer(this.canvas, this.assetLoader);
         
@@ -285,9 +285,18 @@ class Game {
         // Create player character with selected character type
         const characterConfig = { ...CHARACTERS[this.selectedCharacter], isPlayer: true };
         const player = new Player(characterConfig);
-        
-        // Spawn player in center of map
-        player.setPosition(mapConfig.centerX, mapConfig.centerY);
+
+        // Spawn all players (human + bots) spread across the map with safety constraints
+        const totalCharactersToSpawn = gameConfig.match.aiCount + 1;
+        const spawnPoints = this.generateCharacterSpawns(mapConfig, totalCharactersToSpawn, {
+            clearanceRadius: 70,
+            minSpacing: 240,
+            marginFromEdge: 140,
+            maxAttemptsPerSpawn: 250
+        });
+
+        // First spawn is always the human player
+        player.setPosition(spawnPoints[0].x, spawnPoints[0].y);
         
         // Equip player with a Blaster weapon (Tier 1)
         const blasterWeapon = new Weapon(createWeapon('blaster', 1));
@@ -304,16 +313,41 @@ class Game {
         for (let i = 0; i < aiCount; i++) {
             const characterType = characterTypes[i];
             const skillLevel = skillLevels[i];
+
+            const baseSkillProfile = gameConfig.ai.skillProfiles?.[skillLevel] || null;
+
+            // Per-bot personality variance (kept small; avoids wildly unfair spikes)
+            const varianceStrength = skillLevel === 'expert' ? 0.07 : (skillLevel === 'intermediate' ? 0.1 : 0.14);
+            const jitter = (value, min, max) => {
+                if (typeof value !== 'number') return value;
+                const factor = 1 + (Math.random() - 0.5) * 2 * varianceStrength;
+                const v = value * factor;
+                return Math.max(min, Math.min(max, v));
+            };
+
+            const skillProfile = baseSkillProfile ? {
+                ...baseSkillProfile,
+                reactionTimeSeconds: jitter(baseSkillProfile.reactionTimeSeconds, 0.12, 1.2),
+                perceptionRange: jitter(baseSkillProfile.perceptionRange, 180, 600),
+                aimAccuracy: jitter(baseSkillProfile.aimAccuracy, 0.35, 0.99),
+                aggression: jitter(baseSkillProfile.aggression, 0.15, 0.95),
+                strafeStrength: jitter(baseSkillProfile.strafeStrength, 0.2, 0.8),
+                abilityUseChancePerSecond: jitter(baseSkillProfile.abilityUseChancePerSecond, 0.02, 0.6)
+            } : null;
             
             const aiConfig = {
                 ...CHARACTERS[characterType],
                 isPlayer: false,
-                aiSkillLevel: skillLevel
+                aiSkillLevel: skillLevel,
+                aiProfile: skillProfile
             };
             const aiOpponent = new AICharacter(aiConfig);
-            
-            // Spawn AI at spawn points around the map edge
-            const spawnPoint = mapConfig.characterSpawns[i % mapConfig.characterSpawns.length];
+
+            // Stable per-bot movement style (breaks hive-mind feel)
+            aiOpponent.strafeSide = Math.random() < 0.5 ? -1 : 1;
+
+            // Spawn AI using the same randomized spawn distribution as the player
+            const spawnPoint = spawnPoints[i + 1];
             aiOpponent.setPosition(spawnPoint.x, spawnPoint.y);
             
             // Add AI to game state
@@ -691,6 +725,65 @@ class Game {
         // If all attempts fail, return null (skip this spawn)
         console.warn(`Could not find valid spawn position near (${Math.round(x)}, ${Math.round(y)})`);
         return null;
+    }
+
+    generateCharacterSpawns(mapConfig, count, options = {}) {
+        const clearanceRadius = options.clearanceRadius ?? 60;
+        const minSpacing = options.minSpacing ?? 220;
+        const marginFromEdge = options.marginFromEdge ?? 140;
+        const maxAttemptsPerSpawn = options.maxAttemptsPerSpawn ?? 200;
+
+        const spawns = [];
+
+        const isFarEnoughFromOthers = (candidate) => {
+            const minSpacingSq = minSpacing * minSpacing;
+            for (let i = 0; i < spawns.length; i++) {
+                const dx = candidate.x - spawns[i].x;
+                const dy = candidate.y - spawns[i].y;
+                if (dx * dx + dy * dy < minSpacingSq) return false;
+            }
+            return true;
+        };
+
+        for (let i = 0; i < count; i++) {
+            let chosen = null;
+
+            for (let attempt = 0; attempt < maxAttemptsPerSpawn; attempt++) {
+                const angle = Math.random() * Math.PI * 2;
+                const maxR = Math.max(50, mapConfig.radius - marginFromEdge);
+                const r = Math.sqrt(Math.random()) * maxR;
+                const x = mapConfig.centerX + Math.cos(angle) * r;
+                const y = mapConfig.centerY + Math.sin(angle) * r;
+
+                const validPos = this.findValidSpawnPosition(x, y, mapConfig, clearanceRadius, 6);
+                if (!validPos) continue;
+                if (!isFarEnoughFromOthers(validPos)) continue;
+
+                chosen = validPos;
+                break;
+            }
+
+            if (!chosen) {
+                console.warn(`Could not find safe random spawn for character ${i + 1}; falling back to map spawn list if available.`);
+                if (mapConfig.characterSpawns && mapConfig.characterSpawns.length > 0) {
+                    const fallback = mapConfig.characterSpawns[i % mapConfig.characterSpawns.length];
+                    const validFallback = this.findValidSpawnPosition(
+                        fallback.x,
+                        fallback.y,
+                        mapConfig,
+                        clearanceRadius,
+                        10
+                    );
+                    chosen = validFallback || { x: mapConfig.centerX, y: mapConfig.centerY };
+                } else {
+                    chosen = { x: mapConfig.centerX, y: mapConfig.centerY };
+                }
+            }
+
+            spawns.push(chosen);
+        }
+
+        return spawns;
     }
 }
 
