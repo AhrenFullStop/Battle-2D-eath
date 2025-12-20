@@ -2,7 +2,6 @@
 
 import { CHARACTERS } from '../config/characters.js';
 import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
-import { BUILD_VERSION } from '../config/buildInfo.js';
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -113,8 +112,29 @@ export class StartScreen {
         // Setup event listeners
         this.setupEventListeners();
 
+        // Build/version label (CI-stamped on deploy). Loaded at runtime to avoid stale module caching.
+        this.buildVersionText = 'vdev';
+        this.loadBuildVersion();
+
         // DOM modal (minimal) for map settings
         this.ensureMapSettingsModal();
+    }
+
+    async loadBuildVersion() {
+        try {
+            const url = new URL('build-info.json', document.baseURI);
+            // Cache-bust so GH Pages/browser caches can’t pin an old version string.
+            url.searchParams.set('t', String(Date.now()));
+
+            const res = await fetch(url.toString(), { cache: 'no-store' });
+            if (!res.ok) return;
+            const data = await res.json();
+            const counter = data?.counter;
+            if (!counter) return;
+            this.buildVersionText = `v${counter}`;
+        } catch {
+            // Keep default
+        }
     }
 
     renderLogo() {
@@ -781,7 +801,7 @@ export class StartScreen {
         const fontSize = Math.max(10, 12 * scale);
         const pad = 8 * scale;
 
-        const text = BUILD_VERSION && BUILD_VERSION !== 'dev' ? `v${BUILD_VERSION}` : 'vdev';
+        const text = this.buildVersionText || 'vdev';
 
         ctx.save();
         ctx.font = `${fontSize}px Arial`;
