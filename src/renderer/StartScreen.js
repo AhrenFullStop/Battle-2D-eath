@@ -2,6 +2,7 @@
 
 import { CHARACTERS } from '../config/characters.js';
 import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
+import { BUILD_VERSION } from '../config/buildInfo.js';
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -767,7 +768,27 @@ export class StartScreen {
                 this.renderStartButton();
             }
         }
+
+        // Version footer (CI-stamped on deploy)
+        this.renderBuildVersion();
         
+        ctx.restore();
+    }
+
+    renderBuildVersion() {
+        const ctx = this.ctx;
+        const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
+        const fontSize = Math.max(10, 12 * scale);
+        const pad = 10 * scale;
+
+        const text = BUILD_VERSION && BUILD_VERSION !== 'dev' ? `v${BUILD_VERSION}` : 'vdev';
+
+        ctx.save();
+        ctx.font = `${fontSize}px Arial`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.fillText(text, pad, this.canvas.height - pad);
         ctx.restore();
     }
 
