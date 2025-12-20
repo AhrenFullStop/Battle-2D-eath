@@ -452,7 +452,6 @@ Milestone Completion Notes (fill in when done):
 - [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
 - [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
 - [] Game Over Screen: left align the came over stats
-- [] Basics: add a favicon
-- [] CI/CD: Change deployment to automatically add a version counter. Display version on bottom of start screen
+- [x] Basics: add a favicon
 - [] Map settings: Make settings in map selection (start screen) more clickable. right now its too small.
 
