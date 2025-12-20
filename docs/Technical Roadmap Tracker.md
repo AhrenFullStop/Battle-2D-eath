@@ -399,7 +399,7 @@ Reality check:
 - Our rule is “no servers ever” — so we must explicitly decide what “multiplayer” means under that constraint.
 
 ### Decision Log (must resolve before serious implementation)
-- [ ] Define acceptable connectivity model
+- [x] Define acceptable connectivity model
   - Options to decide between:
     - A) Same-device / split-screen style (not true P2P, but zero networking)
     - B) Same-LAN peer connections (best effort) with manual pairing
@@ -407,26 +407,31 @@ Reality check:
   - Acceptance:
     - Chosen model documented, including known limitations.
 
+Chosen model:
+- **C) Manual offer/answer WebRTC** (copy/paste SDP), with **STUN off by default**.
+- Lobby includes an optional “Use public STUN” toggle to improve NAT traversal.
+- Practical limitation: with STUN disabled, some internet connections won’t work (expected).
+
 ### Implementation track (after decision)
-- [ ] Introduce “Netcode layer” abstraction
+- [x] Introduce “Netcode layer” abstraction
   - User story: As the codebase, local and networked matches share the same simulation.
   - Acceptance:
     - Simulation consumes an “input stream” regardless of source.
     - Local play is just a special case of the same interface.
 
-- [ ] Implement deterministic tick clock
+- [x] Implement deterministic tick clock
   - User story: As multiplayer, all peers simulate the same ticks.
   - Acceptance:
     - Fixed tick rate defined and enforced.
     - All simulation randomness is seeded and replayable.
 
-- [ ] Build pairing UX (no servers)
+- [x] Build pairing UX (no servers)
   - User story: As two players, we can connect without hosted infrastructure.
   - Acceptance:
     - Host creates a join code (offer) that can be copy/pasted (and optionally QR).
     - Client pastes code (answer) to connect.
 
-- [ ] Start with 1v1 Free-For-All (smallest playable slice)
+- [x] Start with 1v1 Free-For-All (smallest playable slice)
   - User story: As two players, we can fight in the same match.
   - Acceptance:
     - Both players spawn and can move/fire.
@@ -440,8 +445,26 @@ Reality check:
 
 Milestone Completion Notes (fill in when done):
 - Summary:
+  - Implemented **manual offer/answer WebRTC** pairing (copy/paste) with clear connection status in a Multiplayer Lobby.
+  - Added a **ready-up flow** with a **cancellable countdown**; match starts only after both players ready.
+  - Shipped a deterministic **2-player lockstep** simulation: peers exchange quantized per-tick inputs and only advance when both inputs exist.
+  - Multiplayer v0 is intentionally **no-loot + fixed starting weapon** (Blaster Tier 1) to keep the first slice deterministic.
+  - Solo mode remains unchanged and playable.
+
 - Files touched:
+  - [src/renderer/StartScreen.js](../src/renderer/StartScreen.js)
+  - [src/main.js](../src/main.js)
+  - [src/systems/PhysicsSystem.js](../src/systems/PhysicsSystem.js)
+  - [src/systems/AbilitySystem.js](../src/systems/AbilitySystem.js)
+  - [styles/main.css](../styles/main.css)
+  - [src/net/WebRTCManualConnection.js](../src/net/WebRTCManualConnection.js)
+  - [src/net/LockstepSession2P.js](../src/net/LockstepSession2P.js)
+  - [src/net/prng.js](../src/net/prng.js)
+
 - Key decisions:
+  - Determinism is enforced by **lockstep from inputs** (not state sync).
+  - **STUN is optional and off by default**; enabling it improves connectivity without introducing gameplay servers.
+  - First shipped slice is **2-player**; scaling beyond 2 players and team modes is tracked under the remaining Milestone 7 task.
 
 ---
 
@@ -460,8 +483,10 @@ Milestone Completion Notes (fill in when done):
   - Acceptance: One flag enables rendering of AI state and target info.
 
 
-### Low hanging fruit: 
+### Side-notes: 
 - [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
 - [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
 - [] Refactor: refactor codebase to use templates/components where it makes sense. no single file should be over 1000 lines.
+- [] Player stats: player stats are too closely bundled together the text is too tight. add some madding to make it pretty
+- [] Gameplay: Sometimes instant death from bot damage hit. Is bot damage the same as ours?
 

@@ -27,8 +27,8 @@ export class PhysicsSystem {
             return;
         }
         
-        // Apply input to player
-        if (character.isPlayer) {
+        // Apply input to human-controlled characters (local player or remote network player)
+        if (typeof character.getInputVector === 'function') {
             this.applyPlayerInput(character);
         }
         

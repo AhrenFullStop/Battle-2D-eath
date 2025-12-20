@@ -60,14 +60,13 @@ export class AbilitySystem {
         // Apply speed boost
         character.moveSpeed = character.originalMoveSpeed * speedMultiplier;
         character.dashSpeedBoostActive = true;
-        character.dashSpeedBoostEnd = Date.now() + duration;
+        character.dashSpeedBoostRemainingMs = duration;
         
         // Create visual effect
         this.activeEffects.push({
             type: 'dash',
             character: character,
-            startTime: Date.now(),
-            duration: duration
+            remainingMs: duration
         });
         
         console.log(`Bolt dash activated! Speed boosted to ${character.moveSpeed} for 3 seconds`);
@@ -106,7 +105,7 @@ export class AbilitySystem {
             
             // Apply stun (reduce movement temporarily)
             target.stunned = true;
-            target.stunnedUntil = Date.now() + stunDuration;
+            target.stunRemainingMs = stunDuration;
         });
         
         // Create visual effect
@@ -114,8 +113,7 @@ export class AbilitySystem {
             type: 'groundSlam',
             position: character.position.clone(),
             radius: slamRadius,
-            startTime: Date.now(),
-            duration: 500
+            remainingMs: 500
         });
         
         return true;
@@ -141,27 +139,33 @@ export class AbilitySystem {
     
     // Update ability effects
     update(deltaTime) {
-        const now = Date.now();
-        
-        // Remove expired effects
+        const dtMs = deltaTime * 1000;
+
+        // Update and remove expired effects
         this.activeEffects = this.activeEffects.filter(effect => {
-            return now - effect.startTime < effect.duration;
+            effect.remainingMs -= dtMs;
+            return effect.remainingMs > 0;
         });
         
         // Update stunned characters
         this.gameState.characters.forEach(character => {
-            if (character.stunned && character.stunnedUntil <= now) {
-                character.stunned = false;
-                character.stunnedUntil = 0;
+            if (character.stunned) {
+                character.stunRemainingMs = (character.stunRemainingMs || 0) - dtMs;
+                if (character.stunRemainingMs <= 0) {
+                    character.stunned = false;
+                    character.stunRemainingMs = 0;
+                }
             }
             
             // Update dash speed boost
-            if (character.dashSpeedBoostActive && character.dashSpeedBoostEnd <= now) {
-                // Restore original move speed
-                character.moveSpeed = character.originalMoveSpeed;
-                character.dashSpeedBoostActive = false;
-                character.dashSpeedBoostEnd = 0;
-                console.log(`Bolt dash ended! Speed restored to ${character.moveSpeed}`);
+            if (character.dashSpeedBoostActive) {
+                character.dashSpeedBoostRemainingMs = (character.dashSpeedBoostRemainingMs || 0) - dtMs;
+                if (character.dashSpeedBoostRemainingMs <= 0) {
+                    character.moveSpeed = character.originalMoveSpeed;
+                    character.dashSpeedBoostActive = false;
+                    character.dashSpeedBoostRemainingMs = 0;
+                    console.log(`Bolt dash ended! Speed restored to ${character.moveSpeed}`);
+                }
             }
         });
     }

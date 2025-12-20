@@ -4,6 +4,8 @@ import { CHARACTERS } from '../config/characters.js';
 import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';
 import { META_CONFIG } from '../config/metaProgression.js';
 import { loadProfile, saveProfile, getXpProgress, purchaseUpgrade, checkRequirements, getUpgradeLevel } from '../core/ProfileStore.js';
+import { WebRTCManualConnection, getOptionalPublicStunIceServers } from '../net/WebRTCManualConnection.js';
+import { randomSeedUint32 } from '../net/prng.js';
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -105,6 +107,27 @@ export class StartScreen {
         // Start requested flag
         this.startRequested = false;
 
+        // Multiplayer start requested flag
+        this.multiplayerStartRequested = false;
+        this.multiplayerStartSession = null;
+
+        // Multiplayer lobby state (DOM overlay driven for copy/paste)
+        this.mp = {
+            role: null, // 'host' | 'client'
+            connection: null,
+            useStun: false,
+            statusText: 'Disconnected',
+            offerCode: '',
+            answerCode: '',
+            remoteReady: false,
+            localReady: false,
+            countdown: { active: false, secondsLeft: 0, endsAtMs: 0 },
+            seed: null,
+            mapFile: 'facey.json'
+        };
+
+        this.mpDom = null;
+
         // Meta profile (shared via localStorage)
         this.profile = loadProfile();
 
@@ -132,6 +155,433 @@ export class StartScreen {
 
         // DOM modal (minimal) for map settings
         this.ensureMapSettingsModal();
+
+        // DOM overlay for Multiplayer lobby (created lazily)
+    }
+
+    ensureMultiplayerLobbyDom() {
+        if (this.mpDom) return;
+
+        const root = document.createElement('div');
+        root.className = 'mp-lobby';
+        root.style.display = 'none';
+
+        root.innerHTML = `
+            <div class="mp-panel">
+                <div class="mp-row mp-title">Multiplayer Lobby</div>
+
+                <div class="mp-row">
+                    <div class="mp-label">Status</div>
+                    <div class="mp-status" data-mp="status">Disconnected</div>
+                </div>
+
+                <div class="mp-row mp-inline">
+                    <label class="mp-inline">
+                        <input type="checkbox" data-mp="useStun" />
+                        <span>Use public STUN (optional)</span>
+                    </label>
+                </div>
+
+                <div class="mp-row mp-buttons">
+                    <button class="mp-btn" data-mp="host">Host</button>
+                    <button class="mp-btn" data-mp="join">Join</button>
+                    <button class="mp-btn" data-mp="disconnect" disabled>Disconnect</button>
+                </div>
+
+                <div class="mp-row mp-split">
+                    <div class="mp-col">
+                        <div class="mp-label">Offer / Join Code</div>
+                        <textarea class="mp-text" data-mp="offer" rows="5" readonly placeholder="Tap Host to generate an offer, or paste one here after tapping Join."></textarea>
+                        <div class="mp-row mp-buttons">
+                            <button class="mp-btn" data-mp="copyOffer" disabled>Copy</button>
+                        </div>
+                    </div>
+                    <div class="mp-col">
+                        <div class="mp-label">Answer</div>
+                        <textarea class="mp-text" data-mp="answer" rows="5" placeholder="Paste the answer here (Host), or copy it from here (Join)"></textarea>
+                        <div class="mp-row mp-buttons">
+                            <button class="mp-btn" data-mp="makeAnswer" disabled>Create Answer</button>
+                            <button class="mp-btn" data-mp="applyAnswer" disabled>Apply Answer</button>
+                            <button class="mp-btn" data-mp="copyAnswer" disabled>Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mp-row mp-buttons">
+                    <button class="mp-btn mp-primary" data-mp="ready" disabled>Ready</button>
+                    <button class="mp-btn" data-mp="unready" disabled>Cancel</button>
+                </div>
+
+                <div class="mp-row">
+                    <div class="mp-countdown" data-mp="countdown"></div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(root);
+
+        const q = (sel) => root.querySelector(sel);
+        const statusEl = q('[data-mp="status"]');
+        const offerEl = q('[data-mp="offer"]');
+        const answerEl = q('[data-mp="answer"]');
+        const countdownEl = q('[data-mp="countdown"]');
+
+        const btnHost = q('[data-mp="host"]');
+        const btnJoin = q('[data-mp="join"]');
+        const btnDisconnect = q('[data-mp="disconnect"]');
+        const btnCopyOffer = q('[data-mp="copyOffer"]');
+        const btnMakeAnswer = q('[data-mp="makeAnswer"]');
+        const btnApplyAnswer = q('[data-mp="applyAnswer"]');
+        const btnCopyAnswer = q('[data-mp="copyAnswer"]');
+        const btnReady = q('[data-mp="ready"]');
+        const btnUnready = q('[data-mp="unready"]');
+
+        const stunCheckbox = q('[data-mp="useStun"]');
+
+        const render = () => {
+            statusEl.textContent = this.mp.statusText;
+            offerEl.value = this.mp.offerCode || '';
+            if (this.mp.role === 'client') {
+                // joiner pastes offer; answer becomes generated output
+                // Keep offer editable for joiner.
+                offerEl.readOnly = false;
+                btnMakeAnswer.disabled = !this.mp.offerCode || !!this.mp.connection;
+                btnApplyAnswer.disabled = true;
+                btnCopyAnswer.disabled = !this.mp.answerCode;
+                btnCopyOffer.disabled = true;
+            } else if (this.mp.role === 'host') {
+                offerEl.readOnly = true;
+                btnMakeAnswer.disabled = true;
+                btnApplyAnswer.disabled = !this.mp.answerCode || !this.mp.connection;
+                btnCopyOffer.disabled = !this.mp.offerCode;
+                btnCopyAnswer.disabled = false;
+            } else {
+                offerEl.readOnly = true;
+                btnMakeAnswer.disabled = true;
+                btnApplyAnswer.disabled = true;
+                btnCopyAnswer.disabled = true;
+                btnCopyOffer.disabled = true;
+            }
+
+            btnDisconnect.disabled = !this.mp.connection;
+            btnReady.disabled = !this.mp.connection || !this.mp.connection.isConnected() || this.mp.localReady;
+            btnUnready.disabled = !this.mp.connection || !this.mp.connection.isConnected() || !this.mp.localReady;
+
+            if (this.mp.countdown.active) {
+                countdownEl.textContent = `Match starting in ${this.mp.countdown.secondsLeft}…`;
+            } else {
+                countdownEl.textContent = '';
+            }
+        };
+
+        const setStatus = (text) => {
+            this.mp.statusText = text;
+            render();
+        };
+
+        const shutdown = () => {
+            if (this.mp.connection) {
+                this.mp.connection.onMessage = null;
+                this.mp.connection.onStatus = null;
+                this.mp.connection.close();
+            }
+            this.mp.role = null;
+            this.mp.connection = null;
+            this.mp.offerCode = '';
+            this.mp.answerCode = '';
+            this.mp.remoteReady = false;
+            this.mp.localReady = false;
+            this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+            this.mp.seed = null;
+            setStatus('Disconnected');
+        };
+
+        const send = (payload) => {
+            if (!this.mp.connection) return;
+            this.mp.connection.send(payload);
+        };
+
+        const startCountdownHost = (seconds) => {
+            if (!this.mp.connection || this.mp.role !== 'host') return;
+            this.mp.countdown.active = true;
+            this.mp.countdown.secondsLeft = seconds;
+            this.mp.countdown.endsAtMs = Date.now() + seconds * 1000;
+            send({ type: 'countdown_start', seconds, endsAtMs: this.mp.countdown.endsAtMs });
+            render();
+        };
+
+        const cancelCountdownHost = () => {
+            if (!this.mp.connection || this.mp.role !== 'host') return;
+            if (!this.mp.countdown.active) return;
+            this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+            send({ type: 'countdown_cancel' });
+            render();
+        };
+
+        const tryStartCountdownHost = () => {
+            if (this.mp.role !== 'host') return;
+            if (!this.mp.localReady || !this.mp.remoteReady) return;
+            if (this.mp.countdown.active) return;
+            startCountdownHost(3);
+        };
+
+        const finalizeStartHost = () => {
+            if (this.mp.role !== 'host') return;
+            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
+
+            // Generate a deterministic seed (shared by both peers).
+            if (this.mp.seed == null) this.mp.seed = randomSeedUint32();
+
+            send({ type: 'start', seed: this.mp.seed, mapFile: this.mp.mapFile });
+
+            // Also start locally.
+            this.multiplayerStartRequested = true;
+            this.multiplayerStartSession = {
+                role: 'host',
+                seed: this.mp.seed,
+                mapFile: this.mp.mapFile,
+                connection: this.mp.connection
+            };
+        };
+
+        const handleLobbyMessage = (msg) => {
+            if (!msg || msg.v !== 1) return;
+            switch (msg.type) {
+                case 'ready': {
+                    this.mp.remoteReady = !!msg.ready;
+                    if (this.mp.role === 'host') {
+                        if (!this.mp.remoteReady || !this.mp.localReady) cancelCountdownHost();
+                        tryStartCountdownHost();
+                    }
+                    render();
+                    break;
+                }
+                case 'countdown_start': {
+                    // Client mirrors host’s countdown.
+                    if (this.mp.role !== 'client') break;
+                    const seconds = Number(msg.seconds) || 3;
+                    const endsAtMs = Number(msg.endsAtMs) || (Date.now() + seconds * 1000);
+                    this.mp.countdown = { active: true, secondsLeft: seconds, endsAtMs };
+                    render();
+                    break;
+                }
+                case 'countdown_cancel': {
+                    this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+                    render();
+                    break;
+                }
+                case 'start': {
+                    // Client receives the authoritative start packet.
+                    if (this.mp.role !== 'client') break;
+                    const seed = msg.seed;
+                    const mapFile = msg.mapFile;
+                    if (!Number.isInteger(seed) || typeof mapFile !== 'string') break;
+                    this.mp.seed = seed;
+                    this.mp.mapFile = mapFile;
+
+                    this.multiplayerStartRequested = true;
+                    this.multiplayerStartSession = {
+                        role: 'client',
+                        seed,
+                        mapFile,
+                        connection: this.mp.connection
+                    };
+                    break;
+                }
+            }
+        };
+
+        const wireConnection = (conn) => {
+            conn.onStatus = (s) => {
+                if (s === 'connected') {
+                    setStatus('Connected');
+                } else if (s === 'connecting') {
+                    setStatus('Connecting…');
+                } else if (s === 'awaiting-host') {
+                    setStatus('Awaiting host…');
+                } else if (s === 'creating-offer') {
+                    setStatus('Creating offer…');
+                } else if (s === 'creating-answer') {
+                    setStatus('Creating answer…');
+                } else if (s === 'setting-offer') {
+                    setStatus('Setting offer…');
+                } else if (s === 'setting-answer') {
+                    setStatus('Setting answer…');
+                } else if (s === 'disconnected' || s === 'closed') {
+                    setStatus('Disconnected');
+                } else if (typeof s === 'string' && s.startsWith('pc:')) {
+                    // keep last state in the status line if we have nothing more user-friendly
+                    if (!conn.isConnected()) setStatus('Connecting…');
+                }
+            };
+            conn.onMessage = handleLobbyMessage;
+        };
+
+        // UI events
+        stunCheckbox.addEventListener('change', () => {
+            this.mp.useStun = !!stunCheckbox.checked;
+        });
+
+        offerEl.addEventListener('input', () => {
+            this.mp.offerCode = offerEl.value;
+            render();
+        });
+        answerEl.addEventListener('input', () => {
+            this.mp.answerCode = answerEl.value;
+            render();
+        });
+
+        btnHost.addEventListener('click', async () => {
+            shutdown();
+            this.mp.role = 'host';
+            const iceServers = this.mp.useStun ? getOptionalPublicStunIceServers() : [];
+            const conn = new WebRTCManualConnection({ role: 'host', iceServers });
+            this.mp.connection = conn;
+            wireConnection(conn);
+            try {
+                this.mp.offerCode = await conn.createOfferCode();
+                setStatus('Offer ready. Send it to your friend.');
+            } catch (e) {
+                console.error(e);
+                setStatus('Failed to create offer');
+            }
+            render();
+        });
+
+        btnJoin.addEventListener('click', async () => {
+            shutdown();
+            this.mp.role = 'client';
+            const iceServers = this.mp.useStun ? getOptionalPublicStunIceServers() : [];
+            const conn = new WebRTCManualConnection({ role: 'client', iceServers });
+            this.mp.connection = conn;
+            wireConnection(conn);
+            setStatus('Paste offer, then Create Answer');
+            render();
+        });
+
+        btnDisconnect.addEventListener('click', () => {
+            shutdown();
+        });
+
+        btnCopyOffer.addEventListener('click', async () => {
+            if (!this.mp.offerCode) return;
+            try {
+                await navigator.clipboard.writeText(this.mp.offerCode);
+            } catch {
+                // ignore
+            }
+        });
+
+        btnMakeAnswer.addEventListener('click', async () => {
+            if (!this.mp.connection || this.mp.role !== 'client') return;
+            try {
+                this.mp.answerCode = await this.mp.connection.acceptOfferCodeAndCreateAnswer(this.mp.offerCode);
+                // Populate the output for copy.
+                answerEl.value = this.mp.answerCode;
+                setStatus('Answer ready. Send it back to host.');
+            } catch (e) {
+                console.error(e);
+                setStatus('Failed to create answer');
+            }
+            render();
+        });
+
+        btnApplyAnswer.addEventListener('click', async () => {
+            if (!this.mp.connection || this.mp.role !== 'host') return;
+            try {
+                await this.mp.connection.acceptAnswerCode(this.mp.answerCode);
+                setStatus('Connecting…');
+            } catch (e) {
+                console.error(e);
+                setStatus('Failed to apply answer');
+            }
+            render();
+        });
+
+        btnCopyAnswer.addEventListener('click', async () => {
+            if (!this.mp.answerCode) return;
+            try {
+                await navigator.clipboard.writeText(this.mp.answerCode);
+            } catch {
+                // ignore
+            }
+        });
+
+        btnReady.addEventListener('click', () => {
+            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
+            this.mp.localReady = true;
+            send({ type: 'ready', ready: true });
+            if (this.mp.role === 'host') tryStartCountdownHost();
+            render();
+        });
+
+        btnUnready.addEventListener('click', () => {
+            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
+            this.mp.localReady = false;
+            send({ type: 'ready', ready: false });
+            if (this.mp.role === 'host') cancelCountdownHost();
+            render();
+        });
+
+        // Countdown updater (UI-only)
+        const countdownTimer = () => {
+            if (!this.mpDom) return;
+            if (!this.mp.countdown.active) {
+                render();
+                requestAnimationFrame(countdownTimer);
+                return;
+            }
+
+            const msLeft = this.mp.countdown.endsAtMs - Date.now();
+            const secLeft = Math.max(0, Math.ceil(msLeft / 1000));
+            this.mp.countdown.secondsLeft = secLeft;
+            render();
+
+            if (secLeft <= 0) {
+                this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+                render();
+                if (this.mp.role === 'host') {
+                    finalizeStartHost();
+                }
+            }
+
+            requestAnimationFrame(countdownTimer);
+        };
+
+        requestAnimationFrame(countdownTimer);
+
+        this.mpDom = {
+            root,
+            shutdown,
+            render,
+            updateLayout: () => {
+                const rect = this.canvas.getBoundingClientRect();
+                root.style.left = `${rect.left}px`;
+                root.style.top = `${rect.top}px`;
+                root.style.width = `${rect.width}px`;
+                root.style.height = `${rect.height}px`;
+            }
+        };
+
+        render();
+    }
+
+    showMultiplayerLobbyDom() {
+        this.ensureMultiplayerLobbyDom();
+        this.mpDom.root.style.display = 'block';
+        this.mpDom.updateLayout();
+        this.mpDom.render();
+    }
+
+    hideMultiplayerLobbyDom() {
+        if (!this.mpDom) return;
+        this.mpDom.root.style.display = 'none';
+    }
+
+    shutdownMultiplayerLobby() {
+        if (this.mpDom && typeof this.mpDom.shutdown === 'function') {
+            this.mpDom.shutdown();
+        }
     }
 
     async loadBuildVersion() {
@@ -458,10 +908,23 @@ export class StartScreen {
         this.canvas.addEventListener('touchend', this.onTouchEndBound, { passive: false });
     }
     
-    removeEventListeners() {
+    removeEventListeners(options = {}) {
         this.canvas.removeEventListener('touchstart', this.onTouchStartBound);
         this.canvas.removeEventListener('touchmove', this.onTouchMoveBound);
         this.canvas.removeEventListener('touchend', this.onTouchEndBound);
+
+        // Multiplayer cleanup
+        if (!options.preserveMultiplayerConnection) {
+            this.shutdownMultiplayerLobby();
+        } else {
+            // Hide UI-only pieces but keep the active RTCPeerConnection alive.
+            this.hideMultiplayerLobbyDom();
+        }
+        this.hideMultiplayerLobbyDom();
+        if (this.mpDom && this.mpDom.root && this.mpDom.root.parentNode) {
+            this.mpDom.root.parentNode.removeChild(this.mpDom.root);
+        }
+        this.mpDom = null;
     }
     
     getCanvasCoordinates(clientX, clientY) {
@@ -575,6 +1038,8 @@ export class StartScreen {
 
         if (this.menuState === 'multiplayer') {
             if (this.isPointInButton(coords.x, coords.y, this.backButton)) {
+                this.shutdownMultiplayerLobby();
+                this.hideMultiplayerLobbyDom();
                 this.menuState = 'home';
             }
             return null;
@@ -857,22 +1322,23 @@ export class StartScreen {
         
         if (this.menuState === 'home') {
             this.renderHomeMenu();
+            this.hideMultiplayerLobbyDom();
         } else if (this.menuState === 'multiplayer') {
             this.renderBackButton();
             this.renderMultiplayerPlaceholder();
-            ctx.font = `${instructionSize}px Arial`;
-            ctx.fillStyle = '#888888';
-            ctx.textAlign = 'center';
-            ctx.fillText('Multiplayer is first-class — coming soon', this.canvas.width / 2, this.instructionY);
+            this.showMultiplayerLobbyDom();
         } else if (this.menuState === 'profileStats') {
             this.renderBackButton();
             this.renderProfileStatsScreen();
+            this.hideMultiplayerLobbyDom();
         } else if (this.menuState === 'upgrades') {
             this.renderBackButton();
             this.renderUpgradesScreen();
+            this.hideMultiplayerLobbyDom();
         } else {
             // Solo
             this.renderBackButton();
+            this.hideMultiplayerLobbyDom();
 
             if (typeof this.renderSoloSelection === 'function') {
                 this.renderSoloSelection();
@@ -885,6 +1351,11 @@ export class StartScreen {
                 this.renderMapSelection();
                 this.renderStartButton();
             }
+        }
+
+        // Keep overlay aligned if visible
+        if (this.menuState === 'multiplayer' && this.mpDom) {
+            this.mpDom.updateLayout();
         }
 
         // Version footer (CI-stamped on deploy)
@@ -1203,9 +1674,11 @@ export class StartScreen {
 
         ctx.fillStyle = '#bbbbbb';
         ctx.font = `${bodySize}px Arial`;
-        ctx.fillText('Coming soon.', this.canvas.width / 2, this.canvas.height * 0.48);
+        ctx.fillText('Connect via copy/paste, then Ready up.', this.canvas.width / 2, this.canvas.height * 0.48);
         ctx.restore();
     }
+
+    
 
     renderBackButton() {
         this.renderMenuButton(this.backButton, '#e5e7eb', '#111827');
@@ -2363,5 +2836,13 @@ export class StartScreen {
         const requested = this.menuState === 'solo' && this.startRequested;
         this.startRequested = false;
         return requested;
+    }
+
+    checkMultiplayerStartRequested() {
+        const requested = this.menuState === 'multiplayer' && this.multiplayerStartRequested;
+        this.multiplayerStartRequested = false;
+        const session = this.multiplayerStartSession;
+        this.multiplayerStartSession = null;
+        return requested ? session : null;
     }
 }

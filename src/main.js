@@ -26,6 +26,8 @@ import { generateAISkills, generateAICharacterTypes, generateWeaponTier } from '
 import { Vector2D } from './utils/Vector2D.js';
 import { resolveMapsUrl, warnMissingAsset } from './utils/assetUrl.js';
 import { loadProfile, saveProfile, computeMatchRewards, recordMatchToProfile, getMaxHpMultiplierFromUpgrades } from './core/ProfileStore.js';
+import { createMulberry32 } from './net/prng.js';
+import { LockstepSession2P } from './net/LockstepSession2P.js';
 
 class Game {
     constructor() {
@@ -85,6 +87,12 @@ class Game {
         // Meta progression
         this.profile = loadProfile();
         this.rewardsAwarded = false;
+
+        // Match mode
+        this.matchMode = 'solo'; // 'solo' | 'multiplayer'
+        this.mpSession = null;
+        this.mpLockstep = null;
+        this.mpPlayers = null; // { local: Player, remote: Player }
     }
     
     setupStartScreenInteraction() {
@@ -93,6 +101,7 @@ class Game {
     }
     
     async startGame() {
+        this.matchMode = 'solo';
         console.log('Starting game with character:', this.selectedCharacter);
         console.log('Starting game with map:', this.selectedMap?.name || 'Random Arena');
         
@@ -180,6 +189,127 @@ class Game {
         this.gameLoop.start();
         
         console.log('Game started! Phase 7: Polish - Final MVP');
+    }
+
+    async startMultiplayerMatch(session) {
+        this.matchMode = 'multiplayer';
+        this.mpSession = session;
+
+        console.log('Starting multiplayer match:', session?.role);
+
+        // Load a deterministic map file (no procedural randomness)
+        const mapFile = session.mapFile || 'facey.json';
+        try {
+            const mapPath = `maps/${mapFile}`;
+            const mapUrl = resolveMapsUrl(mapFile);
+            const response = await fetch(mapUrl);
+            if (!response.ok) {
+                warnMissingAsset('map json', mapPath, `HTTP ${response.status}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const mapData = await response.json();
+            loadMapFromJSON(mapData);
+            console.log('✅ Multiplayer map loaded:', mapData.name || mapFile);
+        } catch (error) {
+            console.error('❌ Failed to load multiplayer map:', error);
+            console.log('Falling back to default procedural map (non-deterministic)');
+        }
+
+        // Remove start screen listeners but KEEP the active multiplayer connection.
+        this.startScreen.removeEventListeners({ preserveMultiplayerConnection: true });
+
+        // Initialize core systems
+        this.gameState = new GameState();
+        this.eventBus = new EventBus();
+
+        // Assets already loaded for menu; ensure game assets available.
+        if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
+            await this.assetLoader.loadGameAssets();
+        }
+
+        // Systems (no AI / no loot)
+        this.inputSystem = new InputSystem(this.canvas, this.eventBus, this.assetLoader);
+        this.physicsSystem = new PhysicsSystem(this.gameState);
+        this.combatSystem = new CombatSystem(this.gameState, this.eventBus);
+        this.safeZoneSystem = new SafeZoneSystem(this.gameState, this.eventBus);
+        this.abilitySystem = new AbilitySystem(this.gameState, this.eventBus, this.combatSystem);
+        this.aiSystem = null;
+        this.cameraSystem = new CameraSystem(CANVAS_WIDTH, CANVAS_HEIGHT);
+        this.renderer = new Renderer(this.canvas, this.assetLoader);
+        this.consumables = [];
+
+        this.gameState.safeZoneSystem = this.safeZoneSystem;
+
+        // Setup event listeners for stats tracking
+        this.setupEventListeners();
+        this.rewardsAwarded = false;
+
+        // Create players (Bolt vs Bolt for the MVP slice)
+        const localIsHost = session.role === 'host';
+        const localPlayerIndex = localIsHost ? 0 : 1;
+
+        // Detach lobby message handler; game owns transport now.
+        if (session.connection) {
+            session.connection.onMessage = null;
+            session.connection.onStatus = null;
+        }
+
+        this.mpLockstep = new LockstepSession2P({
+            transport: session.connection,
+            localPlayerIndex,
+            inputDelayTicks: 2
+        });
+
+        const boltConfigLocal = { ...CHARACTERS['bolt'], isPlayer: true };
+        const boltConfigRemote = { ...CHARACTERS['bolt'], isPlayer: false };
+
+        const localPlayer = new Player(boltConfigLocal);
+        const remotePlayer = new Player(boltConfigRemote);
+        remotePlayer.isRemoteHuman = true;
+
+        // Deterministic spawns
+        const mapConfig = getCurrentMapConfig();
+        const rng = createMulberry32((session.seed >>> 0) || 1);
+        const spawns = this.generateCharacterSpawns(mapConfig, 2, {
+            clearanceRadius: 70,
+            minSpacing: 520,
+            marginFromEdge: 180,
+            maxAttemptsPerSpawn: 350
+        }, rng);
+
+        // Assign spawn order by player index
+        const p0 = localIsHost ? localPlayer : remotePlayer;
+        const p1 = localIsHost ? remotePlayer : localPlayer;
+        p0.setPosition(spawns[0].x, spawns[0].y);
+        p1.setPosition(spawns[1].x, spawns[1].y);
+
+        // Fixed starting weapon (deterministic): Blaster tier 1
+        const blaster0 = new Weapon(createWeapon('blaster', 1));
+        const blaster1 = new Weapon(createWeapon('blaster', 1));
+        p0.equipWeapon(blaster0);
+        p1.equipWeapon(blaster1);
+
+        this.gameState.addCharacter(p0);
+        this.gameState.addCharacter(p1);
+
+        // Camera to local player
+        this.cameraSystem.x = localPlayer.position.x - CANVAS_WIDTH / 2;
+        this.cameraSystem.y = localPlayer.position.y - CANVAS_HEIGHT / 2;
+        this.cameraSystem.targetX = this.cameraSystem.x;
+        this.cameraSystem.targetY = this.cameraSystem.y;
+        this.gameState.camera = this.cameraSystem.getBounds();
+
+        this.mpPlayers = { local: localPlayer, remote: remotePlayer };
+
+        // Game loop
+        this.gameLoop = new GameLoop(
+            (deltaTime) => this.update(deltaTime),
+            (interpolation) => this.render(interpolation)
+        );
+
+        this.phase = 'playing';
+        this.mpLockstep.start();
+        this.gameLoop.start();
     }
     
     // Setup event listeners
@@ -273,6 +403,15 @@ class Game {
     resetToMenu() {
         console.log('Resetting to menu...');
 
+        // Close multiplayer session if active
+        if (this.matchMode === 'multiplayer' && this.mpSession && this.mpSession.connection) {
+            try {
+                this.mpSession.connection.close();
+            } catch {
+                // ignore
+            }
+        }
+
         // Stop running match loop
         if (this.gameLoop) {
             this.gameLoop.stop();
@@ -302,6 +441,11 @@ class Game {
         this.cameraSystem = null;
         this.renderer = null;
         this.consumables = [];
+
+        this.matchMode = 'solo';
+        this.mpSession = null;
+        this.mpLockstep = null;
+        this.mpPlayers = null;
 
         // Recreate StartScreen (and its listeners) exactly once
         if (this.startScreen) {
@@ -486,6 +630,11 @@ class Game {
         if (this.phase !== 'playing' || !this.gameState || this.gameState.phase !== 'playing') {
             return;
         }
+
+        if (this.matchMode === 'multiplayer') {
+            this.updateMultiplayer(deltaTime);
+            return;
+        }
         
         // Update game time
         this.gameState.updateTime(deltaTime);
@@ -616,6 +765,130 @@ class Game {
         }
     }
 
+    updateMultiplayer(deltaTime) {
+        const localPlayer = this.mpPlayers?.local;
+        const remotePlayer = this.mpPlayers?.remote;
+        if (!localPlayer || !remotePlayer || !this.mpLockstep) return;
+
+        // Update local input system (UI + capture)
+        this.inputSystem.update(localPlayer);
+
+        const getLocalInput = () => {
+            const move = this.inputSystem.getMovementInput();
+            const weaponInput = this.inputSystem.checkWeaponFired();
+            const fired = !!weaponInput.fired;
+
+            return {
+                moveX: move.x,
+                moveY: move.y,
+                fire: fired,
+                aimAngle: fired ? weaponInput.angle : 0,
+                ability: this.inputSystem.checkAbilityActivated(),
+                heal: this.inputSystem.checkHealthKitUsed()
+            };
+        };
+
+        // Feed the lockstep layer (sends inputs ahead)
+        this.mpLockstep.tick(getLocalInput);
+
+        // Advance simulation only when we have both players' inputs for the next tick.
+        // Deterministic lockstep may stall (visible stutter) under high latency.
+        if (this.mpLockstep.canSimulateNextTick()) {
+            const step = this.mpLockstep.popNextTickInputs();
+            if (!step) return;
+
+            // Apply per-tick time
+            this.gameState.updateTime(deltaTime);
+
+            // Safe zone and camera
+            this.safeZoneSystem.update(deltaTime);
+            this.cameraSystem.update(localPlayer);
+            this.gameState.camera = this.cameraSystem.getBounds();
+
+            const frames = step.frames;
+            const localFrame = this.mpLockstep.localPlayerIndex === 0 ? frames[0] : frames[1];
+            const remoteFrame = this.mpLockstep.localPlayerIndex === 0 ? frames[1] : frames[0];
+
+            // Update player movement inputs
+            localPlayer.update(deltaTime, { x: localFrame.moveX, y: localFrame.moveY });
+            remotePlayer.update(deltaTime, { x: remoteFrame.moveX, y: remoteFrame.moveY });
+
+            // Process actions (fire/heal/ability)
+            this.applyMultiplayerActions(localPlayer, localFrame);
+            this.applyMultiplayerActions(remotePlayer, remoteFrame);
+
+            // Physics + combat + abilities
+            this.physicsSystem.update(deltaTime);
+            this.combatSystem.update(deltaTime);
+            this.abilitySystem.update(deltaTime);
+
+            // Match end (1v1)
+            if (localPlayer.isDead && !remotePlayer.isDead) {
+                this.endMultiplayerMatch('playerDied');
+            } else if (!localPlayer.isDead && remotePlayer.isDead) {
+                this.endMultiplayerMatch('playerWon');
+            }
+
+        }
+
+        // Award meta rewards exactly once when the match ends.
+        if (!this.rewardsAwarded && (this.gameState.phase === 'gameOver' || this.gameState.phase === 'victory')) {
+            this.rewardsAwarded = true;
+            const rewards = computeMatchRewards(this.gameState.matchStats);
+            this.gameState.matchRewards = {
+                xpEarned: rewards.xpEarned,
+                coinsEarned: rewards.coinsEarned
+            };
+            this.profile.xp += rewards.xpEarned;
+            this.profile.coins += rewards.coinsEarned;
+
+            recordMatchToProfile(this.profile, this.gameState.matchStats, {
+                character: 'bolt',
+                map: this.mpSession?.mapFile || 'multiplayer'
+            });
+            saveProfile(this.profile);
+        }
+    }
+
+    endMultiplayerMatch(reason) {
+        if (!this.gameState || this.gameState.phase !== 'playing') return;
+
+        this.gameState.matchEndReason = reason;
+        this.gameState.phase = (reason === 'playerWon') ? 'victory' : 'gameOver';
+
+        this.gameState.matchStats.survivalTime = this.gameState.matchTime;
+        this.gameState.matchStats.finalPlacement = (reason === 'playerWon') ? 1 : 2;
+
+        console.log('=== MULTIPLAYER MATCH END ===');
+        console.log(`Reason: ${reason}`);
+        console.log(`Survival Time: ${Math.floor(this.gameState.matchStats.survivalTime)}s`);
+        console.log(`Kills: ${this.gameState.matchStats.kills}`);
+        console.log(`Damage Dealt: ${Math.round(this.gameState.matchStats.damageDealt)}`);
+        console.log(`Final Placement: ${this.gameState.matchStats.finalPlacement}`);
+    }
+
+    applyMultiplayerActions(player, frame) {
+        if (!player || player.isDead) return;
+
+        if (frame.fire) {
+            player.switchToWeapon(0);
+            const weapon = player.getActiveWeapon();
+            if (weapon) {
+                this.combatSystem.fireWeapon(player, weapon, frame.aimAngle);
+            }
+        }
+
+        if (frame.heal) {
+            if (player.useHealthKit()) {
+                this.eventBus.emit('healthKitUsed', { character: player });
+            }
+        }
+
+        if (frame.ability) {
+            this.abilitySystem.activateAbility(player);
+        }
+    }
+
     // Check if player can pickup weapons (with timer)
     checkWeaponPickups(player) {
         const availableWeapons = this.aiSystem.getAvailableWeapons();
@@ -732,6 +1005,19 @@ class Game {
         // Render start screen if not playing
         if (this.phase === 'start') {
             this.startScreen.render();
+
+            // Check if multiplayer start was requested
+            const mpSession = this.startScreen.checkMultiplayerStartRequested
+                ? this.startScreen.checkMultiplayerStartRequested()
+                : null;
+            if (mpSession) {
+                console.log('Multiplayer start requested');
+                if (this.startScreenLoop) {
+                    this.startScreenLoop.stop();
+                }
+                this.startMultiplayerMatch(mpSession);
+                return;
+            }
             
             // Check if start was requested
             if (this.startScreen.checkStartRequested()) {
@@ -821,7 +1107,7 @@ class Game {
         return null;
     }
 
-    generateCharacterSpawns(mapConfig, count, options = {}) {
+    generateCharacterSpawns(mapConfig, count, options = {}, randomFn = Math.random) {
         const clearanceRadius = options.clearanceRadius ?? 60;
         const minSpacing = options.minSpacing ?? 220;
         const marginFromEdge = options.marginFromEdge ?? 140;
@@ -843,9 +1129,9 @@ class Game {
             let chosen = null;
 
             for (let attempt = 0; attempt < maxAttemptsPerSpawn; attempt++) {
-                const angle = Math.random() * Math.PI * 2;
+                const angle = randomFn() * Math.PI * 2;
                 const maxR = Math.max(50, mapConfig.radius - marginFromEdge);
-                const r = Math.sqrt(Math.random()) * maxR;
+                const r = Math.sqrt(randomFn()) * maxR;
                 const x = mapConfig.centerX + Math.cos(angle) * r;
                 const y = mapConfig.centerY + Math.sin(angle) * r;
 
