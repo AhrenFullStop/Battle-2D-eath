@@ -1,4 +1,3 @@
-import { EventBus } from './EventBus.js';
 import { computeMatchRewards, recordMatchToProfile, saveProfile } from './ProfileStore.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants.js';
 

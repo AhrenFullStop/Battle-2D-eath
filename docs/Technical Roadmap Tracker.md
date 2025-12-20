@@ -486,7 +486,21 @@ Milestone Completion Notes (fill in when done):
 ### Side-notes: 
 - [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
 - [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
-- [] Refactor: refactor codebase to use templates/components where it makes sense. no single file should be over 1000 lines.
-- [] Player stats: player stats are too closely bundled together the text is too tight. add some madding to make it pretty
-- [] Gameplay: Sometimes instant death from bot damage hit. Is bot damage the same as ours?
+- [] Player stats: player stats on the start screen (when you click and open your xp card) are too closely bundled together the text is too tight. add some madding to make it much nicer. 
+- [] Gameplay: Sometimes I get instant death from bot damage hit. It may be the bomb type. Is bot damage the same as ours?
+- [] Weapon - Bomb: Right now the bomb weapon is acting just like a spear, shooting down a straight line. However what we want is for the bomb to "land" where the player is aiming and then cause area damage around that landing spot. The visuals need to communicate this; 
+  - Arc for aim render to illustrate its a "thrown" weapon. 
+  - Visual "explosion" when bomb detonates (see ground slam ability damage indicator)
+  - This damage indicator should be rendered for all players
+- [] Weapon - Gun: The gun weapon bullets need to spread out slightly more when firing. right now they all go in the exact same line. This can be deterministic. The number of bullets in the burst should also be upgradeable (see upgrades)
+- [] Multiplayer: Create server and joining is overly complicated and currently doesn't work. I create an offer code by selecting host on device 1. I send that code to device 2:
+
+```offer code block
+{"type":"offer","sdp":"v=0\r\no=- 2696547141053488769 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=extmap-allow-mixed\r\na=msid-semantic: WMS\r\nm=application 41590 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 192.168.0.18\r\na=candidate:1743707660 1 udp 2113937151 192.168.0.18 41590 typ host generation 0 network-cost 999\r\na=ice-ufrag:MaoL\r\na=ice-pwd:Gpm4OP+yYZNCjdCwEfNEqoG7\r\na=ice-options:trickle\r\na=fingerprint:sha-256 14:C3:D6:55:8E:3A:D5:E6:E5:5B:48:9A:31:9E:FE:D4:81:74:9F:5F:CA:19:6D:77:91:D0:6F:AE:65:16:FB:E3\r\na=setup:actpass\r\na=mid:0\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"}
+```
+
+On device 2; I click 'Join' then paste in the offer block. I cant do anything further. no other blocks are clickable and clicking on join again will clear the offer/join code.
+
+The menu and user journey is very complex and hard to understand. let's make this better.
+
 

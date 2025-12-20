@@ -67,7 +67,10 @@ export class GameLoop {
         requestAnimationFrame((time) => this.loop(time));
     }
 
-    // Get current FPS for debugging
+    /**
+     * Get current FPS for debugging
+     * @returns {number} Current frames per second
+     */
     getFPS() {
         return this.currentFPS;
     }

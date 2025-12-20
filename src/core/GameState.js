@@ -165,7 +165,9 @@ export class GameState {
         this.matchStats.weaponFiredCount++;
     }
 
-    // Reset the game state
+    /**
+     * Reset the game state to initial values
+     */
     reset() {
         this.phase = 'playing';
         this.matchTime = 0;

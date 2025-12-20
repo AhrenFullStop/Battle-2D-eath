@@ -136,8 +136,11 @@ export class AbilitySystem {
     getGroundSlamPreview() {
         return this.groundSlamPreview;
     }
-    
-    // Update ability effects
+
+    /**
+     * Update ability effects
+     * @param {number} deltaTime - Time elapsed since last update in seconds
+     */
     update(deltaTime) {
         const dtMs = deltaTime * 1000;
 

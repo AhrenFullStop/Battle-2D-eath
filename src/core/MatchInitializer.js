@@ -1,4 +1,3 @@
-import { GameState } from './GameState.js';
 import { Player } from '../entities/Player.js';
 import { AICharacter } from '../entities/AICharacter.js';
 import { EventBus } from './EventBus.js';
@@ -10,7 +9,6 @@ import { AISystem } from '../systems/AISystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
 import { AbilitySystem } from '../systems/AbilitySystem.js';
 import { Renderer } from '../renderer/Renderer.js';
-import { GameLoop } from './GameLoop.js';
 import { SpawnManager } from './SpawnManager.js';
 import { CHARACTERS } from '../config/characters.js';
 import { createWeapon } from '../config/weapons.js';

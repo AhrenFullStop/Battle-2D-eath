@@ -105,7 +105,9 @@ export class InputSystem {
         this.canvas.addEventListener('mouseup', this.onMouseUpBound);
     }
 
-    // Remove all input listeners (used when resetting back to menu)
+    /**
+     * Remove all input listeners
+     */
     removeEventListeners() {
         this.canvas.removeEventListener('touchstart', this.onTouchStartBound);
         this.canvas.removeEventListener('touchmove', this.onTouchMoveBound);

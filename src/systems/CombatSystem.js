@@ -360,6 +360,9 @@ export class CombatSystem {
         this.damageNumbers = [];
     }
 
+    /**
+     * Dispose of the combat system and clean up resources
+     */
     dispose() {
         this.disposed = true;
         this.clear();

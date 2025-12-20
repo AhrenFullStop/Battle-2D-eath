@@ -12,10 +12,6 @@ export const FIXED_TIMESTEP = 1000 / TARGET_FPS; // 16.67ms
 export const FRICTION = 0.85;
 export const MAX_VELOCITY = 500;
 
-// Map boundaries (now defined in map.js, but kept for compatibility)
-export const MAP_WIDTH = 3000;
-export const MAP_HEIGHT = 3000;
-
 // Virtual joystick settings (20% larger)
 export const JOYSTICK_RADIUS = 80; 
 export const JOYSTICK_KNOB_RADIUS = 30; // Was 25, now 20% larger

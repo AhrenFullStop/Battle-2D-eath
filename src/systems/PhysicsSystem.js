@@ -24,7 +24,7 @@ export class PhysicsSystem {
 
     // Update character physics
     updateCharacterPhysics(character, deltaTime) {
-        // Don't apply movement if character is stunned (Phase 7: Boulder ability)
+        // Don't apply movement if character is stunned (e.g.: Boulder ability)
         if (character.stunned) {
             character.velocity.set(0, 0);
             return;
@@ -70,7 +70,10 @@ export class PhysicsSystem {
         character.isInBush = this.isInBush(character);
     }
 
-    // Apply player input to velocity
+    /**
+     * Apply player input to character movement
+     * @param {Character} character - Character to move
+     */
     applyPlayerInput(character) {
         const input = character.getInputVector();
         
@@ -170,34 +173,5 @@ export class PhysicsSystem {
             }
         }
         return false;
-    }
-
-    // Circle-circle collision detection (for future use)
-    checkCircleCollision(entity1, entity2) {
-        const dx = entity2.position.x - entity1.position.x;
-        const dy = entity2.position.y - entity1.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = entity1.hitboxRadius + entity2.hitboxRadius;
-        
-        return distance < minDistance;
-    }
-
-    // Separate two overlapping circles (for future use)
-    separateCircles(entity1, entity2) {
-        const dx = entity2.position.x - entity1.position.x;
-        const dy = entity2.position.y - entity1.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = entity1.hitboxRadius + entity2.hitboxRadius;
-        
-        if (distance < minDistance && distance > 0) {
-            const overlap = minDistance - distance;
-            const separationX = (dx / distance) * overlap * 0.5;
-            const separationY = (dy / distance) * overlap * 0.5;
-            
-            entity1.position.x -= separationX;
-            entity1.position.y -= separationY;
-            entity2.position.x += separationX;
-            entity2.position.y += separationY;
-        }
     }
 }
