@@ -1,4 +1,25 @@
-// Main application entry point - Battle-2D-eath Phase 11: Architecture Refactor
+/**
+ * main.js - Game Entry Point and Lifecycle Manager
+ *
+ * Main application entry point that orchestrates the game lifecycle, manages
+ * transitions between menu and gameplay, and coordinates solo vs multiplayer modes.
+ * This is the top-level controller that delegates to specialized systems.
+ *
+ * Key Responsibilities:
+ * - Initialize StartScreen (menu system)
+ * - Manage game mode selection (solo vs multiplayer)
+ * - Coordinate match initialization via MatchInitializer
+ * - Delegate gameplay updates to GameOrchestrator or MultiplayerMatchController
+ * - Handle match teardown and return to menu
+ *
+ * Architecture Notes:
+ * - Uses GameLoop for fixed timestep updates (60 FPS)
+ * - Delegates solo gameplay to GameOrchestrator
+ * - Delegates multiplayer to MultiplayerMatchController
+ * - Manages canvas event listeners for end-screen interactions
+ *
+ * @module main
+ */
 
 import { GameLoop } from './core/GameLoop.js';
 import { GameState } from './core/GameState.js';

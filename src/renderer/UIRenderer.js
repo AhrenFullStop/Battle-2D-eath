@@ -13,7 +13,15 @@ export class UIRenderer {
         };
     }
 
-    // Render all UI elements
+    /**
+     * Render game UI (health, weapons, minimap, etc.)
+     * @param {Object} gameState - Current game state
+     * @param {VirtualJoystick} joystick - Virtual joystick for mobile controls
+     * @param {Array} weaponButtons - Weapon selection buttons
+     * @param {AbilityButton} abilityButton - Special ability button
+     * @param {Array} healthKitButtons - Health kit buttons
+     * @param {GameLoop} gameLoop - Game loop for timing information
+     */
     render(gameState, joystick, weaponButtons, abilityButton, healthKitButtons, gameLoop) {
         // Show game over or victory screen if match ended
         if (gameState.phase === 'gameOver' || gameState.phase === 'victory') {
@@ -296,7 +304,10 @@ export class UIRenderer {
         // This method is kept for compatibility but does nothing
     }
 
-    // Render match end screen (game over or victory)
+    /**
+     * Render end screen (victory/game over)
+     * @param {Object} gameState - Game state containing match results
+     */
     renderMatchEndScreen(gameState) {
         const ctx = this.ctx;
         ctx.save();

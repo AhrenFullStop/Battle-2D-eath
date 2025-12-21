@@ -64,7 +64,11 @@ export class Character extends Entity {
         }
     }
 
-    // Take damage
+    /**
+     * Apply damage to this character
+     * @param {number} damage - Damage amount
+     * @returns {boolean} True if character died from this damage
+     */
     takeDamage(amount) {
         if (this.isDead) return;
         
@@ -85,7 +89,11 @@ export class Character extends Entity {
         }
     }
 
-    // Heal character
+    /**
+     * Heal this character
+     * @param {number} amount - Healing amount
+     * @returns {number} Actual amount healed (capped at maxHP)
+     */
     heal(amount) {
         if (this.isDead) return;
         
@@ -121,7 +129,10 @@ export class Character extends Entity {
         return this.healthKits < this.maxHealthKits;
     }
 
-    // Add shield
+    /**
+     * Add shield to this character
+     * @param {number} amount - Shield amount to add
+     */
     addShield(amount) {
         if (this.isDead) return;
         
@@ -152,7 +163,11 @@ export class Character extends Entity {
         return !this.isDead && this.active;
     }
 
-    // Add weapon to inventory
+    /**
+     * Add a weapon to character's inventory
+     * @param {Object} weapon - Weapon to add
+     * @returns {{ok: boolean, reason: string}} Result of adding weapon
+     */
     addWeapon(weapon) {
         weapon.setOwner(this);
         

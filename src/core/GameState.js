@@ -1,4 +1,27 @@
-// Centralized game state management
+/**
+ * GameState.js - Centralized Game State Container
+ *
+ * Manages all game entities and runtime state in a centralized, observable
+ * structure. Provides a single source of truth for characters, weapons,
+ * consumables, match status, and player statistics.
+ *
+ * Key Responsibilities:
+ * - Track all game entities (characters, weapons, consumables, projectiles)
+ * - Manage match state (elapsed time, placement, match end status)
+ * - Track player statistics (kills, damage, items used, etc.)
+ * - Provide query methods for active/alive entities
+ *
+ * Architecture Notes:
+ * - Read by all systems; modified primarily by game orchestrators
+ * - Statistics used for end-of-match rewards and progression
+ * - Maintains separate arrays for different entity types for performance
+ *
+ * Performance Considerations:
+ * - Use getActiveCharacters() sparingly (creates filtered array)
+ * - Arrays are not pooled; avoid frequent entity creation/destruction
+ *
+ * @module core/GameState
+ */
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants.js';
 import { MAP_CONFIG } from '../config/map.js';

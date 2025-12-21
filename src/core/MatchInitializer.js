@@ -1,3 +1,26 @@
+/**
+ * MatchInitializer.js - Match Setup and Initialization
+ *
+ * Handles all initialization logic for both solo and multiplayer matches.
+ * Coordinates map loading, character spawning, system initialization, and
+ * event listener setup to prepare a match for gameplay.
+ *
+ * Key Responsibilities:
+ * - Load and configure selected map
+ * - Initialize all game systems (physics, combat, AI, etc.)
+ * - Spawn player and AI characters at valid positions
+ * - Setup initial weapons and consumables via SpawnManager
+ * - Configure multiplayer session if applicable
+ *
+ * Architecture Notes:
+ * - Returns initialized systems, spawnManager, and playerCharacter
+ * - Used by both Game (solo) and MultiplayerMatchController
+ * - Delegates spawning logic to SpawnManager
+ * - Configures deterministic RNG for multiplayer
+ *
+ * @module core/MatchInitializer
+ */
+
 import { Player } from '../entities/Player.js';
 import { AICharacter } from '../entities/AICharacter.js';
 import { EventBus } from './EventBus.js';
@@ -26,6 +49,13 @@ export class MatchInitializer {
         this.assetLoader = assetLoader;
     }
 
+    /**
+     * Initialize a solo match with player and AI opponents
+     * @param {string} playerCharacterType - Type of player character
+     * @param {Object} selectedMap - Map configuration
+     * @param {Object} profile - Player profile data
+     * @returns {Promise<{systems: Object, spawnManager: SpawnManager, playerCharacter: Player}>}
+     */
     async initializeSoloMatch(playerCharacterType, selectedMap, profile) {
         console.log('Initializing solo match...');
 
@@ -69,6 +99,14 @@ export class MatchInitializer {
         return { systems, spawnManager, playerCharacter };
     }
 
+    /**
+     * Initialize a multiplayer match
+     * @param {Object} session - Multiplayer session
+     * @param {string} playerCharacterType - Type of player character
+     * @param {Object} selectedMap - Map configuration
+     * @param {Object} profile - Player profile data
+     * @returns {Promise<{systems: Object, spawnManager: SpawnManager, playerCharacter: Player}>}
+     */
     async initializeMultiplayerMatch(session, playerCharacterType, selectedMap, profile) {
         console.log('Initializing multiplayer match...');
 
@@ -111,6 +149,14 @@ export class MatchInitializer {
         return { systems, spawnManager, playerCharacter };
     }
 
+    /**
+     * Initialize solo game with player and AI characters
+     * @param {Object} selectedMap - Selected map configuration
+     * @param {string} playerCharacterType - Player character type
+     * @param {SpawnManager} spawnManager - Spawn manager instance
+     * @param {Object} profile - Player profile data
+     * @returns {Promise<Player>} The player character
+     */
     async initSoloGame(selectedMap, playerCharacterType, spawnManager, profile) {
         const mapConfig = getCurrentMapConfig();
         const gameConfig = getGameConfig();
@@ -216,6 +262,13 @@ export class MatchInitializer {
         return player;
     }
 
+    /**
+     * Initialize multiplayer game with two players
+     * @param {Object} session - Multiplayer session
+     * @param {Object} selectedMap - Selected map configuration
+     * @param {SpawnManager} spawnManager - Spawn manager instance
+     * @returns {Player} The local player character
+     */
     initMultiplayerGame(session, selectedMap, spawnManager) {
         const mapConfig = getCurrentMapConfig();
 
@@ -264,6 +317,11 @@ export class MatchInitializer {
         return localPlayer;
     }
 
+    /**
+     * Setup event listeners for stats tracking
+     * @param {EventBus} eventBus - Event bus instance
+     * @param {Object} profile - Player profile data
+     */
     setupEventListeners(eventBus, profile) {
         // Setup event listeners for stats tracking (extracted from main.js)
         // This would include listeners for damage, kills, etc.

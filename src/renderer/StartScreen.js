@@ -1,4 +1,26 @@
-// Start screen with character selection and map selection
+/**
+ * StartScreen.js - Main Menu and Navigation System
+ *
+ * Implements the canvas-based menu system with navigation between Home,
+ * Solo, Multiplayer, and Upgrades screens. Handles character/map selection,
+ * profile display, and game mode initiation.
+ *
+ * Key Responsibilities:
+ * - Render menu states (Home, Solo, Multiplayer, Upgrades)
+ * - Handle character and map selection
+ * - Display player profile (level, XP, coins)
+ * - Show upgrade shop with purchasable items
+ * - Create multiplayer lobby with WebRTC connection
+ * - Preload map background images for selection cards
+ *
+ * Architecture Notes:
+ * - State machine with menuState controlling screen transitions
+ * - Canvas-based UI to stay consistent with game rendering
+ * - EventBus for loose coupling with game systems
+ * - Caches background images to prevent load hitching
+ *
+ * @module renderer/StartScreen
+ */
 
 import { CHARACTERS } from '../config/characters.js';
 import { resolveMapsUrl, resolveMapBackgroundUrl, warnMissingAsset } from '../utils/assetUrl.js';

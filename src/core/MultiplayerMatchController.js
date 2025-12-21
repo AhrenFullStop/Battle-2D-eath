@@ -1,3 +1,30 @@
+/**
+ * MultiplayerMatchController.js - Multiplayer Match Coordinator
+ *
+ * Manages multiplayer matches using deterministic lockstep simulation.
+ * Coordinates input synchronization, applies networked actions, tracks
+ * statistics, and handles match lifecycle for 2-player games.
+ *
+ * Key Responsibilities:
+ * - Initialize multiplayer session and systems
+ * - Synchronize player inputs via LockstepSession2P
+ * - Apply deterministic actions to maintain sync across peers
+ * - Track match statistics (same as solo)
+ * - Handle match end and rewards
+ *
+ * Architecture Notes:
+ * - Uses lockstep simulation (inputs synced, then applied)
+ * - Deterministic: same inputs + seed = same outcomes on both clients
+ * - EventBus listeners track stats for progression
+ * - No loot or AI in multiplayer v0 (fixed loadout)
+ *
+ * Performance Considerations:
+ * - Network latency handled by lockstep buffering
+ * - Must maintain determinism: no Math.random() or Date.now() in sim
+ *
+ * @module core/MultiplayerMatchController
+ */
+
 import { MatchInitializer } from './MatchInitializer.js';
 import { GameOrchestrator } from './GameOrchestrator.js';
 import { LockstepSession2P } from '../net/LockstepSession2P.js';
@@ -75,6 +102,14 @@ export class MultiplayerMatchController {
         });
     }
 
+    /**
+     * Start a multiplayer match
+     * @param {Object} session - Multiplayer session
+     * @param {string} playerCharacterType - Type of player character
+     * @param {Object} selectedMap - Map configuration
+     * @param {boolean} isHost - Whether this player is host
+     * @returns {Promise<void>}
+     */
     async startMatch(session, playerCharacterType, selectedMap, isHost) {
         this.session = session;
         console.log('Starting multiplayer match:', session?.role);
@@ -111,6 +146,10 @@ export class MultiplayerMatchController {
         return { systems, spawnManager, playerCharacter };
     }
 
+    /**
+     * Update multiplayer match state
+     * @param {number} deltaTime - Time elapsed in seconds
+     */
     update(deltaTime) {
         const localPlayer = this.mpPlayers?.local;
         const remotePlayer = this.mpPlayers?.remote;
@@ -240,6 +279,9 @@ export class MultiplayerMatchController {
         saveProfile(this.profile);
     }
 
+    /**
+     * Teardown multiplayer match and cleanup
+     */
     teardown() {
         // Cleanup multiplayer resources
         if (this.mpLockstep) {

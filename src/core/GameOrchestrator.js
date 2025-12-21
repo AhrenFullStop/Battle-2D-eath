@@ -1,3 +1,30 @@
+/**
+ * GameOrchestrator.js - Solo Match Game Loop Coordinator
+ *
+ * Orchestrates the solo gameplay loop by coordinating system updates,
+ * checking win conditions, handling pickups, tracking statistics, and
+ * managing match progression from start to end.
+ *
+ * Key Responsibilities:
+ * - Update all game systems in correct order each frame
+ * - Process weapon and consumable pickups
+ * - Check win/loss conditions
+ * - Track comprehensive match statistics via EventBus
+ * - Award XP and coins at match end
+ *
+ * Architecture Notes:
+ * - Listens to EventBus for damage, kills, consumables, abilities
+ * - Updates GameState.stats for end-screen display and progression
+ * - Delegates rendering to Renderer
+ * - Only used for solo mode (multiplayer has its own controller)
+ *
+ * Performance Considerations:
+ * - Updates run at 60 FPS; keep system updates efficient
+ * - Pickup checks iterate all weapons/consumables each frame
+ *
+ * @module core/GameOrchestrator
+ */
+
 import { computeMatchRewards, recordMatchToProfile, saveProfile } from './ProfileStore.js';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants.js';
 
@@ -81,6 +108,10 @@ export class GameOrchestrator {
         });
     }
 
+    /**
+     * Update solo match game loop
+     * @param {number} deltaTime - Time elapsed since last update in seconds
+     */
     update(deltaTime) {
         // Only update if game is initialized and playing
         if (this.gameState.phase !== 'playing') {
@@ -200,6 +231,10 @@ export class GameOrchestrator {
         }
     }
 
+    /**
+     * Check if match has ended (win/loss condition)
+     * @returns {boolean} True if match should end
+     */
     checkWinCondition() {
         // Check if player won (last character standing)
         const aliveCharacters = this.gameState.characters.filter(char => !char.isDead);
@@ -208,6 +243,9 @@ export class GameOrchestrator {
         }
     }
 
+    /**
+     * Handle player death event
+     */
     handlePlayerDeath() {
         if (this.playerCharacter && this.playerCharacter.isDead) {
             this.gameState.phase = 'gameOver';
@@ -215,6 +253,9 @@ export class GameOrchestrator {
         }
     }
 
+    /**
+     * Handle player victory event
+     */
     handleVictory() {
         this.gameState.phase = 'victory';
         this.gameState.matchStats.finalPlacement = 1;

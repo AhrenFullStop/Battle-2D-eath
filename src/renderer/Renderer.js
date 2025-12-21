@@ -20,7 +20,17 @@ export class Renderer {
         this.minimapRenderer = new MinimapRenderer(this.ctx);
     }
 
-    // Main render method called each frame
+    /**
+     * Render the game world and UI
+     * @param {Object} gameState - Current game state
+     * @param {InputSystem} inputSystem - Input system for UI elements
+     * @param {GameLoop} gameLoop - Game loop for timing info
+     * @param {number} interpolation - Interpolation factor for smooth rendering
+     * @param {CombatSystem} combatSystem - Combat system for effects
+     * @param {AISystem} aiSystem - AI system for weapon pickups
+     * @param {Array} consumables - Consumable entities
+     * @param {AbilitySystem} abilitySystem - Ability system for previews
+     */
     render(gameState, inputSystem, gameLoop, interpolation, combatSystem, aiSystem, consumables, abilitySystem) {
         // CRITICAL: Clear the entire canvas before rendering
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -87,7 +97,9 @@ export class Renderer {
         this.minimapRenderer.render(gameState, this.canvas.width);
     }
 
-    // Resize canvas to fill viewport
+    /**
+     * Resize canvas to fill viewport
+     */
     resize() {
         // Get viewport dimensions
         const windowWidth = window.innerWidth;

@@ -19,7 +19,10 @@ export class CameraSystem {
         this.targetY = 0;
     }
 
-    // Update camera to follow a target (usually the player)
+    /**
+     * Update camera position to follow a target (usually the player)
+     * @param {Object} target - Target object with position property containing x,y coordinates
+     */
     update(target) {
         if (!target) return;
         
@@ -47,7 +50,10 @@ export class CameraSystem {
         this.targetY = Math.max(mapTop, Math.min(this.targetY, mapBottom - this.canvasHeight));
     }
 
-    // Get camera bounds for rendering
+    /**
+     * Get camera bounds for rendering
+     * @returns {Object} Camera viewport bounds with x, y, width, height properties
+     */
     getBounds() {
         return {
             x: this.x,
@@ -57,7 +63,12 @@ export class CameraSystem {
         };
     }
 
-    // Convert world coordinates to screen coordinates
+    /**
+     * Convert world coordinates to screen coordinates
+     * @param {number} worldX - World X coordinate
+     * @param {number} worldY - World Y coordinate
+     * @returns {Object} Screen coordinates with x,y properties
+     */
     worldToScreen(worldX, worldY) {
         return {
             x: worldX - this.x,
@@ -65,7 +76,12 @@ export class CameraSystem {
         };
     }
 
-    // Convert screen coordinates to world coordinates
+    /**
+     * Convert screen coordinates to world coordinates
+     * @param {number} screenX - Screen X coordinate
+     * @param {number} screenY - Screen Y coordinate
+     * @returns {Object} World coordinates with x,y properties
+     */
     screenToWorld(screenX, screenY) {
         return {
             x: screenX + this.x,
@@ -73,7 +89,13 @@ export class CameraSystem {
         };
     }
 
-    // Check if a world position is visible on screen
+    /**
+     * Check if a world position is visible on screen
+     * @param {number} worldX - World X coordinate
+     * @param {number} worldY - World Y coordinate
+     * @param {number} [margin=0] - Additional margin around viewport
+     * @returns {boolean} True if position is visible on screen
+     */
     isVisible(worldX, worldY, margin = 0) {
         return worldX >= this.x - margin &&
                worldX <= this.x + this.canvasWidth + margin &&

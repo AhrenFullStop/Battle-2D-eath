@@ -1,4 +1,29 @@
-// AI Behavior System - handles decision-making, state machine, and behavior execution
+/**
+ * AIBehaviorSystem.js - AI Decision-Making and Behavior Execution
+ *
+ * Implements the AI state machine and behavior execution logic. Makes decisions
+ * based on perception data and executes behaviors like combat, loot seeking,
+ * fleeing, patrolling, and moving to safe zone.
+ *
+ * Key Responsibilities:
+ * - Make behavioral decisions based on game state and perception
+ * - Execute patrol, combat, flee, seek loot, and safe zone behaviors
+ * - Handle weapon firing with skill-based accuracy
+ * - Use character abilities appropriately (dash, slam)
+ * - Apply strafe movement during combat
+ *
+ * Architecture Notes:
+ * - State machine with priority-based decision tree
+ * - Uses AINavigationSystem for pathfinding
+ * - Uses AIPerceptionSystem for target/loot detection
+ * - Skill profiles control difficulty (aim, reaction time, aggression)
+ *
+ * Performance Considerations:
+ * - Uses scratch vectors to avoid allocations in hot loops
+ * - Decision cooldowns prevent excessive recalculation
+ *
+ * @module systems/ai/AIBehaviorSystem
+ */
 
 import { Vector2D } from '../../utils/Vector2D.js';
 

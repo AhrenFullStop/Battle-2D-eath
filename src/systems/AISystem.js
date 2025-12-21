@@ -1,4 +1,27 @@
-// AI System for managing AI character behavior
+/**
+ * AISystem.js - AI Orchestration System
+ *
+ * Coordinates AI character behavior by delegating to specialized subsystems:
+ * perception (target detection), navigation (pathfinding), and behavior
+ * (decision-making). Also manages weapon/consumable spawning for AI kills.
+ *
+ * Key Responsibilities:
+ * - Update all AI characters each frame
+ * - Delegate to AIPerceptionSystem, AINavigationSystem, AIBehaviorSystem
+ * - Spawn weapons/consumables when AI characters die
+ * - Handle AI respawn logic if configured
+ *
+ * Architecture Notes:
+ * - Composition over inheritance: uses 3 specialized subsystems
+ * - Each subsystem has single responsibility (perception/navigation/behavior)
+ * - AIBehaviorSystem contains the state machine and execution logic
+ *
+ * Performance Considerations:
+ * - Runs every frame for every AI (typically 10-20 bots)
+ * - Subsystems use scratch vectors to avoid allocations
+ *
+ * @module systems/AISystem
+ */
 
 import { Vector2D } from '../utils/Vector2D.js';
 import { Weapon, WeaponPickup } from '../entities/Weapon.js';

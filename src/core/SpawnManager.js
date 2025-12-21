@@ -1,3 +1,25 @@
+/**
+ * SpawnManager.js - Entity Spawning System
+ *
+ * Manages all entity spawning logic including weapons, consumables, and
+ * character placement. Ensures valid spawn positions that avoid obstacles
+ * and maintains proper distribution across the map.
+ *
+ * Key Responsibilities:
+ * - Spawn weapons with randomized tiers
+ * - Spawn consumables (health kits, shield potions)
+ * - Generate character spawn positions avoiding obstacles
+ * - Ensure minimum distance between spawns
+ * - Handle initial weapon/consumable distribution
+ *
+ * Architecture Notes:
+ * - Used by MatchInitializer and GameOrchestrator/AISystem
+ * - Validates spawn positions against map obstacles
+ * - Weapons spawn with probability-based tier distribution
+ *
+ * @module core/SpawnManager
+ */
+
 import { WeaponPickup } from '../entities/Weapon.js';
 import { Consumable } from '../entities/Consumable.js';
 import { Vector2D } from '../utils/Vector2D.js';
@@ -13,12 +35,23 @@ export class SpawnManager {
         this.consumables = [];
     }
 
-    // Spawn a weapon on the ground
+    /**
+     * Spawn a weapon pickup at the specified position
+     * @param {Vector2D} position - World position to spawn weapon
+     * @param {string} weaponType - Type of weapon ('blaster', 'gun', 'spear', 'bomb')
+     * @param {number} tier - Weapon tier (1, 2, or 3)
+     * @returns {Weapon} The spawned weapon entity
+     */
     spawnWeapon(position, weaponType = 'blaster', tier = 1) {
         return this.aiSystem.spawnWeapon(position, weaponType, tier);
     }
 
-    // Spawn a consumable on the ground
+    /**
+     * Spawn a consumable at the specified position
+     * @param {Vector2D} position - World position
+     * @param {string} type - Consumable type ('health' or 'shield')
+     * @returns {Consumable} The spawned consumable entity
+     */
     spawnConsumable(position, type) {
         const consumable = new Consumable(createConsumable(type));
         consumable.setPosition(position.x, position.y);
@@ -26,7 +59,13 @@ export class SpawnManager {
         return consumable;
     }
 
-    // Spawn initial weapons across the map
+    /**
+     * Spawn initial weapons across the map
+     * @param {Object} mapConfig - Map configuration
+     * @param {number} weaponCount - Number of weapons to spawn
+     * @param {Object} gameConfig - Game configuration
+     * @returns {Array} Array of weapon spawn data
+     */
     spawnInitialWeapons(mapConfig, weaponCount, gameConfig) {
         const weaponTypes = ['blaster', 'spear', 'bomb', 'gun'];
         const weaponSpawns = [];
@@ -54,7 +93,12 @@ export class SpawnManager {
         return weaponSpawns;
     }
 
-    // Spawn initial consumables across the map
+    /**
+     * Spawn initial consumables across the map
+     * @param {Object} mapConfig - Map configuration
+     * @param {number} consumableCount - Number of consumables to spawn
+     * @returns {number} Number of consumables spawned
+     */
     spawnInitialConsumables(mapConfig, consumableCount) {
         const consumableTypes = ['healthKit', 'shieldPotion'];
 
@@ -78,7 +122,15 @@ export class SpawnManager {
         return this.consumables.length;
     }
 
-    // Find valid spawn position not on obstacles
+    /**
+     * Find valid spawn position not on obstacles
+     * @param {number} x - Initial X position
+     * @param {number} y - Initial Y position
+     * @param {Object} mapConfig - Map configuration
+     * @param {number} [clearanceRadius=30] - Minimum distance from obstacles
+     * @param {number} [maxAttempts=10] - Maximum attempts to find valid position
+     * @returns {Object|null} Valid position with x,y properties or null if not found
+     */
     findValidSpawnPosition(x, y, mapConfig, clearanceRadius = 30, maxAttempts = 10) {
         // Check if position overlaps with any obstacle
         const checkPosition = (checkX, checkY) => {
@@ -129,6 +181,14 @@ export class SpawnManager {
         return null;
     }
 
+    /**
+     * Generate character spawn positions for all players and AI
+     * @param {Object} mapConfig - Map configuration
+     * @param {number} count - Number of spawns to generate
+     * @param {Object} [options={}] - Spawn options
+     * @param {Function} [randomFn=Math.random] - Random function for deterministic spawning
+     * @returns {Array<Vector2D>} Array of spawn positions
+     */
     generateCharacterSpawns(mapConfig, count, options = {}, randomFn = Math.random) {
         const clearanceRadius = options.clearanceRadius ?? 60;
         const minSpacing = options.minSpacing ?? 220;
@@ -188,7 +248,11 @@ export class SpawnManager {
         return spawns;
     }
 
-    // Helper method to generate weapon tier (moved from gameConfig)
+    /**
+     * Generate weapon tier based on rarity ratios
+     * @param {Object} tierRatios - Tier probability ratios with common, rare, epic properties
+     * @returns {number} Weapon tier (1, 2, or 3)
+     */
     generateWeaponTier(tierRatios) {
         const rand = Math.random();
 

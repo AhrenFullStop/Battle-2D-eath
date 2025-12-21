@@ -4,6 +4,10 @@ import { Character } from './Character.js';
 import { Vector2D } from '../utils/Vector2D.js';
 
 export class AICharacter extends Character {
+    /**
+     * Create a new AI character
+     * @param {Object} config - AI character configuration
+     */
     constructor(config) {
         // Mark as AI
         config.isPlayer = false;
@@ -135,48 +139,71 @@ export class AICharacter extends Character {
         super.update(deltaTime);
     }
     
-    // Set AI state
+    /**
+     * Set AI state
+     * @param {string} newState - New AI state ('patrol', 'seekLoot', 'combat', 'flee')
+     */
     setState(newState) {
         if (this.aiState !== newState) {
             this.aiState = newState;
             this.stateTimer = 0;
         }
     }
-    
-    // Get current state
+
+    /**
+     * Get current AI state
+     * @returns {string} Current AI state
+     */
     getState() {
         return this.aiState;
     }
-    
-    // Check if AI needs to make a decision
+
+    /**
+     * Check if AI can make a decision
+     * @returns {boolean} True if decision cooldown has expired
+     */
     canMakeDecision() {
         return this.decisionCooldown <= 0;
     }
-    
-    // Reset decision cooldown
+
+    /**
+     * Reset decision cooldown
+     */
     resetDecisionCooldown() {
         this.decisionCooldown = this.reactionTime;
     }
-    
-    // Set target enemy
+
+    /**
+     * Set target enemy
+     * @param {Character} enemy - Enemy to target
+     */
     setTargetEnemy(enemy) {
         this.targetEnemy = enemy;
         if (enemy) {
             this.lastSeenPlayerPosition = enemy.position.clone();
         }
     }
-    
-    // Set target weapon
+
+    /**
+     * Set target weapon
+     * @param {WeaponPickup} weapon - Weapon to target
+     */
     setTargetWeapon(weapon) {
         this.targetWeapon = weapon;
     }
-    
-    // Check if should flee
+
+    /**
+     * Check if AI should flee
+     * @returns {boolean} True if health is below flee threshold
+     */
     shouldFlee() {
         return this.getHealthPercentage() < this.fleeHealthThreshold;
     }
-    
-    // Get wander direction
+
+    /**
+     * Get wander direction for patrol behavior
+     * @returns {Vector2D} Wander direction vector
+     */
     getWanderDirection() {
         // Change wander angle periodically
         if (this.wanderChangeTimer <= 0) {

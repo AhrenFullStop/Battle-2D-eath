@@ -41,7 +41,10 @@ export class SafeZoneSystem {
         console.log(`Safe zone phases:`, this.phases);
     }
     
-    // Update safe zone system
+    /**
+     * Update safe zone shrinking and damage application
+     * @param {number} deltaTime - Time elapsed since last update in seconds
+     */
     update(deltaTime) {
         const matchTime = this.gameState.matchTime; // matchTime is already in seconds
         
@@ -170,21 +173,42 @@ export class SafeZoneSystem {
         });
     }
     
-    // Check if position is outside safe zone
+    /**
+     * Check if position is outside safe zone
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @returns {boolean} True if position is outside safe zone
+     */
     isOutsideZone(x, y) {
         const dx = x - this.centerX;
         const dy = y - this.centerY;
         const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
-        
+
         return distanceFromCenter > this.currentRadius;
     }
-    
-    // Check if character is outside zone (convenience method)
+
+    /**
+     * Check if position is in safe zone
+     * @param {Vector2D|Object} position - Position to check with x,y properties
+     * @returns {boolean} True if position is in safe zone
+     */
+    isInSafeZone(position) {
+        return !this.isOutsideZone(position.x, position.y);
+    }
+
+    /**
+     * Check if character is outside zone (convenience method)
+     * @param {Character} character - Character to check
+     * @returns {boolean} True if character is outside safe zone
+     */
     isCharacterOutsideZone(character) {
         return this.charactersOutsideZone.has(character);
     }
-    
-    // Get safe zone info for rendering
+
+    /**
+     * Get current safe zone bounds and state
+     * @returns {Object} Safe zone information for rendering
+     */
     getSafeZoneInfo() {
         return {
             centerX: this.centerX,
@@ -197,7 +221,10 @@ export class SafeZoneSystem {
         };
     }
     
-    // Get time until next phase
+    /**
+     * Get time until next safe zone phase in milliseconds
+     * @returns {number} Time remaining until next phase, or 0 if no more phases
+     */
     getTimeUntilNextPhase() {
         const matchTimeMs = this.gameState.matchTime * 1000;
         
@@ -210,7 +237,10 @@ export class SafeZoneSystem {
         return 0; // No more phases
     }
     
-    // Get current phase info
+    /**
+     * Get current safe zone phase information
+     * @returns {Object} Current phase details including radius, damage, and time until next phase
+     */
     getCurrentPhaseInfo() {
         return {
             phase: this.currentPhaseIndex,
@@ -219,8 +249,10 @@ export class SafeZoneSystem {
             timeUntilNext: this.getTimeUntilNextPhase()
         };
     }
-    
-    // Reset safe zone system
+
+    /**
+     * Reset safe zone system to initial state
+     */
     reset() {
         this.currentPhaseIndex = 0;
         this.currentRadius = this.phases[0].radius;
