@@ -1,0 +1,250 @@
+/* Mobile-First Map Editor Styles */
+
+/* Ripple effect animation for touch feedback */
+@keyframes ripple-effect {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(3);
+        opacity: 0;
+    }
+}
+
+/* Mobile-specific overrides */
+@media (max-width: 767px) {
+    /* Prevent pull-to-refresh and overscroll */
+    body {
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: auto;
+        touch-action: none;
+    }
+    
+    /* Hide desktop-only UI elements on mobile */
+    #backgroundSelectorContainer {
+        display: none !important;
+    }
+    
+    #gameSettingsPanel {
+        /* Move to modal overlay on mobile */
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        right: auto !important;
+        max-height: 80vh !important;
+        width: 90% !important;
+        max-width: 400px !important;
+        z-index: 10000 !important;
+        display: none; /* Hidden by default on mobile */
+    }
+    
+    /* Settings button to show panel */
+    #mobileSettingsButton {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 50px;
+        height: 50px;
+        background: #374151;
+        border: 2px solid #6b7280;
+        border-radius: 8px;
+        color: white;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1001;
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    
+    /* Modal overlay for settings */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        display: none;
+        touch-action: none;
+    }
+    
+    .modal-overlay.active {
+        display: block;
+    }
+    
+    #gameSettingsPanel.active {
+        display: block !important;
+    }
+    
+    /* Touch target improvements */
+    button, 
+    select,
+    input[type="button"],
+    input[type="submit"],
+    .clickable {
+        min-width: 48px;
+        min-height: 48px;
+        touch-action: manipulation;
+    }
+    
+    /* Larger, more readable fonts */
+    #gameSettingsPanel {
+        font-size: 14px !important;
+    }
+    
+    #gameSettingsPanel input,
+    #gameSettingsPanel select {
+        font-size: 16px !important; /* Prevents auto-zoom on iOS */
+        padding: 8px !important;
+    }
+    
+    #gameSettingsPanel fieldset {
+        padding: 12px !important;
+    }
+    
+    #gameSettingsPanel legend {
+        font-size: 14px !important;
+    }
+    
+    /* Close button for settings panel */
+    #closeSettingsButton {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        background: #ef4444;
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        touch-action: manipulation;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* Tablet styles (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    /* Adjust settings panel for tablet */
+    #gameSettingsPanel {
+        width: 360px !important;
+    }
+    
+    /* Background selector - show on tablet */
+    #backgroundSelectorContainer {
+        display: block !important;
+    }
+}
+
+/* Touch feedback for all interactive elements */
+.touch-feedback {
+    position: relative;
+}
+
+.touch-feedback::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.touch-feedback.active::after {
+    animation: touch-ripple 0.6s ease-out;
+}
+
+@keyframes touch-ripple {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+    }
+    100% {
+        width: 100px;
+        height: 100px;
+        opacity: 0;
+    }
+}
+
+/* Prevent text selection during gestures */
+canvas {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    #gameSettingsPanel {
+        border-width: 3px !important;
+    }
+    
+    button,
+    select,
+    input {
+        border-width: 2px !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    @keyframes ripple-effect {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 0;
+        }
+    }
+    
+    @keyframes touch-ripple {
+        0%, 100% {
+            width: 0;
+            height: 0;
+            opacity: 0;
+        }
+    }
+}
+
+/* Dark mode adjustments (if system prefers dark) */
+@media (prefers-color-scheme: dark) {
+    #gameSettingsPanel {
+        background-color: rgba(17, 24, 39, 0.98) !important;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (max-width: 767px) and (orientation: landscape) {
+    #gameSettingsPanel {
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+    }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: env(safe-area-inset-top)) {
+    @media (max-width: 767px) {
+        #mobileSettingsButton {
+            top: calc(10px + env(safe-area-inset-top));
+            right: calc(10px + env(safe-area-inset-right));
+        }
+        
+        #gameSettingsPanel {
+            padding-top: calc(15px + env(safe-area-inset-top)) !important;
+            padding-bottom: calc(15px + env(safe-area-inset-bottom)) !important;
+        }
+    }
+}

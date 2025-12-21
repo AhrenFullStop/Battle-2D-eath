@@ -10,23 +10,17 @@ export class EditorUI {
         this.editor = editor;
         this.camera = camera;
         
-        // UI button positions and sizes
-        this.toolButtons = [
-            { tool: 'pan', label: 'Pan', x: 20, y: 20, width: 100, height: 40, color: '#6b7280' },
-            { tool: 'bush', label: 'Bush', x: 130, y: 20, width: 100, height: 40, color: '#22c55e' },
-            { tool: 'obstacle', label: 'Rock', x: 240, y: 20, width: 100, height: 40, color: '#78716c' },
-            { tool: 'water', label: 'Water', x: 350, y: 20, width: 100, height: 40, color: '#3b82f6' },
-            { tool: 'erase', label: 'Erase', x: 460, y: 20, width: 100, height: 40, color: '#ef4444' }
-        ];
+        // Detect viewport size
+        this.isMobile = window.innerWidth < 768;
+        window.addEventListener('resize', () => {
+            this.isMobile = window.innerWidth < 768;
+            this.updateButtonLayout();
+        });
         
-        this.actionButtons = [
-            { action: 'clear', label: 'Clear All', x: 20, y: 70, width: 100, height: 40 },
-            { action: 'export', label: 'Export', x: 130, y: 70, width: 100, height: 40 },
-            { action: 'import', label: 'Import', x: 240, y: 70, width: 100, height: 40 },
-            { action: 'zoom_in', label: 'Zoom +', x: 350, y: 70, width: 80, height: 40 },
-            { action: 'zoom_out', label: 'Zoom -', x: 440, y: 70, width: 80, height: 40 },
-            { action: 'background', label: 'BG Color', x: 530, y: 70, width: 100, height: 40 }
-        ];
+        // UI button positions and sizes (will be updated based on viewport)
+        this.toolButtons = [];
+        this.actionButtons = [];
+        this.updateButtonLayout();
         
         // Available background colors
         this.backgroundColors = [
@@ -60,6 +54,112 @@ export class EditorUI {
         
         // Create game settings panel
         this.createGameSettingsPanel();
+    }
+    
+    /**
+     * Update button layout based on viewport size
+     */
+    updateButtonLayout() {
+        if (this.isMobile) {
+            // Mobile layout - bottom toolbar, larger touch targets (48x48px minimum)
+            const buttonSize = 58;
+            const spacing = 10;
+            const startY = window.innerHeight - buttonSize - 20;
+            
+            // Tool buttons (bottom center)
+            const toolsStartX = (window.innerWidth - (buttonSize * 5 + spacing * 4)) / 2;
+            this.toolButtons = [
+                { tool: 'pan', label: 'Pan', x: toolsStartX, y: startY, width: buttonSize, height: buttonSize, color: '#6b7280' },
+                { tool: 'bush', label: 'Bush', x: toolsStartX + (buttonSize + spacing), y: startY, width: buttonSize, height: buttonSize, color: '#22c55e' },
+                { tool: 'obstacle', label: 'Rock', x: toolsStartX + (buttonSize + spacing) * 2, y: startY, width: buttonSize, height: buttonSize, color: '#78716c' },
+                { tool: 'water', label: 'Water', x: toolsStartX + (buttonSize + spacing) * 3, y: startY, width: buttonSize, height: buttonSize, color: '#3b82f6' },
+                { tool: 'erase', label: 'Erase', x: toolsStartX + (buttonSize + spacing) * 4, y: startY, width: buttonSize, height: buttonSize, color: '#ef4444' }
+            ];
+            
+            // Action buttons (top, smaller grid)
+            const actionSize = 50;
+            this.actionButtons = [
+                { action: 'undo', label: 'Undo', x: 10, y: 10, width: actionSize, height: actionSize },
+                { action: 'redo', label: 'Redo', x: 10 + actionSize + 5, y: 10, width: actionSize, height: actionSize },
+                { action: 'clear', label: 'Clear', x: 10, y: 10 + actionSize + 5, width: actionSize, height: actionSize },
+                { action: 'export', label: 'Export', x: 10 + actionSize + 5, y: 10 + actionSize + 5, width: actionSize, height: actionSize },
+                { action: 'import', label: 'Import', x: 10, y: 10 + (actionSize + 5) * 2, width: actionSize, height: actionSize },
+                { action: 'zoom_in', label: '+', x: window.innerWidth - actionSize - 10, y: 10, width: actionSize, height: actionSize },
+                { action: 'zoom_out', label: '-', x: window.innerWidth - actionSize - 10, y: 10 + actionSize + 5, width: actionSize, height: actionSize }
+            ];
+        } else {
+            // Desktop layout - top toolbar
+            this.toolButtons = [
+                { tool: 'pan', label: 'Pan', x: 20, y: 20, width: 100, height: 40, color: '#6b7280' },
+                { tool: 'bush', label: 'Bush', x: 130, y: 20, width: 100, height: 40, color: '#22c55e' },
+                { tool: 'obstacle', label: 'Rock', x: 240, y: 20, width: 100, height: 40, color: '#78716c' },
+                { tool: 'water', label: 'Water', x: 350, y: 20, width: 100, height: 40, color: '#3b82f6' },
+                { tool: 'erase', label: 'Erase', x: 460, y: 20, width: 100, height: 40, color: '#ef4444' }
+            ];
+            
+            this.actionButtons = [
+                { action: 'undo', label: 'Undo', x: 20, y: 70, width: 80, height: 40 },
+                { action: 'redo', label: 'Redo', x: 110, y: 70, width: 80, height: 40 },
+                { action: 'clear', label: 'Clear All', x: 200, y: 70, width: 100, height: 40 },
+                { action: 'export', label: 'Export', x: 310, y: 70, width: 100, height: 40 },
+                { action: 'import', label: 'Import', x: 420, y: 70, width: 100, height: 40 },
+                { action: 'zoom_in', label: 'Zoom +', x: 530, y: 70, width: 80, height: 40 },
+                { action: 'zoom_out', label: 'Zoom -', x: 620, y: 70, width: 80, height: 40 }
+            ];
+        }
+    }
+    
+    /**
+     * Update button layout based on viewport size
+     */
+    updateButtonLayout() {
+        if (this.isMobile) {
+            // Mobile layout - bottom toolbar, larger touch targets (48x48px minimum)
+            const buttonSize = 58;
+            const spacing = 10;
+            const startY = window.innerHeight - buttonSize - 20;
+            
+            // Tool buttons (bottom center)
+            const toolsStartX = (window.innerWidth - (buttonSize * 5 + spacing * 4)) / 2;
+            this.toolButtons = [
+                { tool: 'pan', label: 'Pan', x: toolsStartX, y: startY, width: buttonSize, height: buttonSize, color: '#6b7280' },
+                { tool: 'bush', label: 'Bush', x: toolsStartX + (buttonSize + spacing), y: startY, width: buttonSize, height: buttonSize, color: '#22c55e' },
+                { tool: 'obstacle', label: 'Rock', x: toolsStartX + (buttonSize + spacing) * 2, y: startY, width: buttonSize, height: buttonSize, color: '#78716c' },
+                { tool: 'water', label: 'Water', x: toolsStartX + (buttonSize + spacing) * 3, y: startY, width: buttonSize, height: buttonSize, color: '#3b82f6' },
+                { tool: 'erase', label: 'Erase', x: toolsStartX + (buttonSize + spacing) * 4, y: startY, width: buttonSize, height: buttonSize, color: '#ef4444' }
+            ];
+            
+            // Action buttons (top, smaller grid)
+            const actionSize = 50;
+            this.actionButtons = [
+                { action: 'undo', label: 'Undo', x: 10, y: 10, width: actionSize, height: actionSize },
+                { action: 'redo', label: 'Redo', x: 10 + actionSize + 5, y: 10, width: actionSize, height: actionSize },
+                { action: 'clear', label: 'Clear', x: 10, y: 10 + actionSize + 5, width: actionSize, height: actionSize },
+                { action: 'export', label: 'Export', x: 10 + actionSize + 5, y: 10 + actionSize + 5, width: actionSize, height: actionSize },
+                { action: 'import', label: 'Import', x: 10, y: 10 + (actionSize + 5) * 2, width: actionSize, height: actionSize },
+                { action: 'zoom_in', label: '+', x: window.innerWidth - actionSize - 10, y: 10, width: actionSize, height: actionSize },
+                { action: 'zoom_out', label: '-', x: window.innerWidth - actionSize - 10, y: 10 + actionSize + 5, width: actionSize, height: actionSize }
+            ];
+        } else {
+            // Desktop layout - top toolbar
+            this.toolButtons = [
+                { tool: 'pan', label: 'Pan', x: 20, y: 20, width: 100, height: 40, color: '#6b7280' },
+                { tool: 'bush', label: 'Bush', x: 130, y: 20, width: 100, height: 40, color: '#22c55e' },
+                { tool: 'obstacle', label: 'Rock', x: 240, y: 20, width: 100, height: 40, color: '#78716c' },
+                { tool: 'water', label: 'Water', x: 350, y: 20, width: 100, height: 40, color: '#3b82f6' },
+                { tool: 'erase', label: 'Erase', x: 460, y: 20, width: 100, height: 40, color: '#ef4444' }
+            ];
+            
+            this.actionButtons = [
+                { action: 'undo', label: 'Undo', x: 20, y: 70, width: 80, height: 40 },
+                { action: 'redo', label: 'Redo', x: 110, y: 70, width: 80, height: 40 },
+                { action: 'clear', label: 'Clear All', x: 200, y: 70, width: 100, height: 40 },
+                { action: 'export', label: 'Export', x: 310, y: 70, width: 100, height: 40 },
+                { action: 'import', label: 'Import', x: 420, y: 70, width: 100, height: 40 },
+                { action: 'zoom_in', label: 'Zoom +', x: 530, y: 70, width: 80, height: 40 },
+                { action: 'zoom_out', label: 'Zoom -', x: 620, y: 70, width: 80, height: 40 }
+            ];
+        }
     }
     
     async loadBackgroundImages() {
@@ -531,48 +631,83 @@ export class EditorUI {
     drawActionButton(button) {
         const ctx = this.ctx;
         
+        // Check if button should be disabled (undo/redo)
+        let isDisabled = false;
+        if (button.action === 'undo') {
+            isDisabled = !this.editor.canUndo();
+        } else if (button.action === 'redo') {
+            isDisabled = !this.editor.canRedo();
+        }
+        
         // Button background
-        ctx.fillStyle = '#374151';
+        ctx.fillStyle = isDisabled ? '#1f2937' : '#374151';
         ctx.fillRect(button.x, button.y, button.width, button.height);
         
         // Button border
-        ctx.strokeStyle = '#6b7280';
+        ctx.strokeStyle = isDisabled ? '#374151' : '#6b7280';
         ctx.lineWidth = 2;
         ctx.strokeRect(button.x, button.y, button.width, button.height);
         
         // Button text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = isDisabled ? '#4b5563' : '#ffffff';
+        ctx.font = this.isMobile ? 'bold 12px Arial' : 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
     }
     
     drawStats() {
-        const ctx = this.ctx;
-        const counts = this.editor.getObjectCount();
-        
-        // Stats background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(this.statsX, this.statsY, 200, 100);
-        
-        // Stats text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        
-        let y = this.statsY + 10;
-        ctx.fillText(`Bushes: ${counts.bushes}`, this.statsX + 10, y);
-        y += 20;
-        ctx.fillText(`Obstacles: ${counts.obstacles}`, this.statsX + 10, y);
-        y += 20;
-        ctx.fillText(`Water Areas: ${counts.waterAreas}`, this.statsX + 10, y);
-        y += 20;
-        ctx.fillText(`Total: ${counts.total}`, this.statsX + 10, y);
+        if (this.isMobile) {
+            // Simplified stats for mobile (top right, smaller)
+            const ctx = this.ctx;
+            const counts = this.editor.getObjectCount();
+            
+            const width = 100;
+            const height = 50;
+            const x = this.canvas.width - width - 10;
+            const y = this.canvas.height - height - 90; // Above toolbar
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y, width, height);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            ctx.fillText(`B:${counts.bushes} O:${counts.obstacles}`, x + 5, y + 5);
+            ctx.fillText(`W:${counts.waterAreas}`, x + 5, y + 20);
+            ctx.fillText(`Total: ${counts.total}`, x + 5, y + 35);
+        } else {
+            // Desktop stats (same as before)
+            const ctx = this.ctx;
+            const counts = this.editor.getObjectCount();
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(this.statsX, this.statsY, 200, 100);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            let y = this.statsY + 10;
+            ctx.fillText(`Bushes: ${counts.bushes}`, this.statsX + 10, y);
+            y += 20;
+            ctx.fillText(`Obstacles: ${counts.obstacles}`, this.statsX + 10, y);
+            y += 20;
+            ctx.fillText(`Water Areas: ${counts.waterAreas}`, this.statsX + 10, y);
+            y += 20;
+            ctx.fillText(`Total: ${counts.total}`, this.statsX + 10, y);
+        }
     }
     
     drawMapName() {
+        if (this.isMobile) {
+            // Skip map name display on mobile
+            return;
+        }
+        
         const ctx = this.ctx;
         const mapData = this.editor.getMapData();
         
@@ -618,6 +753,11 @@ export class EditorUI {
     }
     
     drawInstructions() {
+        if (this.isMobile) {
+            // Skip instructions on mobile to avoid clutter
+            return;
+        }
+        
         const ctx = this.ctx;
         const startY = this.canvas.height - 120;
         

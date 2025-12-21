@@ -2,6 +2,9 @@
 
 import { MapEditor } from './MapEditor.js';
 import { EditorUI } from './EditorUI.js';
+import { TouchGestureHandler } from './TouchGestureHandler.js';
+import { MapValidator } from './MapValidator.js';
+import { MobileUI } from './MobileUI.js';
 
 class EditorApp {
     constructor() {
@@ -12,10 +15,16 @@ class EditorApp {
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
         
+        // Detect mobile viewport
+        this.isMobile = window.innerWidth < 768;
+        
         // Initialize editor components
         this.editor = new MapEditor();
         this.camera = { x: 400, y: 400, zoom: 0.3 }; // Start zoomed out and centered
         this.ui = new EditorUI(this.canvas, this.ctx, this.editor, this.camera);
+        
+        // Initialize validator
+        this.validator = new MapValidator();
         
         // Camera panning
         this.isPanning = false;
@@ -23,8 +32,19 @@ class EditorApp {
         this.lastPanY = 0;
         this.panSpeed = 1;
         
+        // Touch gesture handler
+        this.gestureHandler = new TouchGestureHandler(this.canvas);
+        this.setupGestureCallbacks();
+        
         // Setup event listeners
         this.setupEventListeners();
+        
+        // Auto-fit viewport for mobile
+        if (this.isMobile) {
+            this.fitMapToViewport();
+            // Create mobile-specific UI (pass editorUI for access to background data)
+            this.mobileUI = new MobileUI(this.editor, this.ui);
+        }
         
         // Start render loop
         this.lastTime = performance.now();
@@ -44,15 +64,112 @@ class EditorApp {
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
         
-        // Touch events
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        // Touch events - use gesture handler
+        this.canvas.addEventListener('touchstart', (e) => this.gestureHandler.handleTouchStart(e), { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => this.gestureHandler.handleTouchMove(e), { passive: false });
+        this.canvas.addEventListener('touchend', (e) => this.gestureHandler.handleTouchEnd(e), { passive: false });
         
-        // Keyboard events for camera and UI toggle
+        // Keyboard events for camera, UI toggle, and undo/redo
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
         
-        console.log('Controls: H = toggle UI, +/- = zoom, Arrow keys = pan');
+        console.log('Controls: H = toggle UI, +/- = zoom, Ctrl+Z/Y = undo/redo');
+    }
+    
+    /**
+     * Setup gesture handler callbacks
+     */
+    setupGestureCallbacks() {
+        // Tap - place object or click UI
+        this.gestureHandler.onTap = (canvasX, canvasY) => {
+            // Check if clicked on UI button
+            const action = this.ui.checkButtonClick(canvasX, canvasY);
+            if (action) {
+                this.handleAction(action);
+                // Mark this as UI interaction to prevent double-tap
+                this.gestureHandler.lastTapTime = 0;
+                return;
+            }
+            
+            // Place object if not pan tool
+            if (this.editor.getCurrentTool() !== 'pan') {
+                const worldX = canvasX / this.camera.zoom + this.camera.x;
+                const worldY = canvasY / this.camera.zoom + this.camera.y;
+                this.editor.handleClick(worldX, worldY);
+            }
+        };
+        
+        // Long-press - for future: select/edit/delete object
+        this.gestureHandler.onLongPress = (canvasX, canvasY) => {
+            // Check if on UI first
+            const action = this.ui.checkButtonClick(canvasX, canvasY);
+            if (action) return; // Ignore long-press on UI
+            
+            const worldX = canvasX / this.camera.zoom + this.camera.x;
+            const worldY = canvasY / this.camera.zoom + this.camera.y;
+            
+            // Check if near an object
+            const nearObject = this.editor.isNearObject(worldX, worldY, 50);
+            if (nearObject) {
+                // For now, just delete it (like erase tool)
+                this.editor.eraseAtPosition(worldX, worldY);
+                console.log('Long-press: deleted object');
+            }
+        };
+        
+        // Double-tap - quick zoom to area (not on UI)
+        this.gestureHandler.onDoubleTap = (canvasX, canvasY) => {
+            // Check if on UI - don't zoom if double-tapping UI
+            const action = this.ui.checkButtonClick(canvasX, canvasY);
+            if (action) return;
+            
+            // Zoom in on double-tap at the tapped location
+            const oldZoom = this.camera.zoom;
+            this.camera.zoom = Math.min(2.0, this.camera.zoom + 0.3);
+            
+            // Zoom toward the tap point
+            const worldX = canvasX / oldZoom + this.camera.x;
+            const worldY = canvasY / oldZoom + this.camera.y;
+            this.camera.x = worldX - canvasX / this.camera.zoom;
+            this.camera.y = worldY - canvasY / this.camera.zoom;
+            
+            console.log('Double-tap zoom:', this.camera.zoom.toFixed(1));
+        };
+        
+        // Pinch zoom
+        this.gestureHandler.onPinch = (scale, centerX, centerY) => {
+            const oldZoom = this.camera.zoom;
+            this.camera.zoom = Math.max(0.3, Math.min(2.0, this.camera.zoom * scale));
+            
+            // Adjust camera position to zoom toward pinch center
+            const worldX = centerX / oldZoom + this.camera.x;
+            const worldY = centerY / oldZoom + this.camera.y;
+            this.camera.x = worldX - centerX / this.camera.zoom;
+            this.camera.y = worldY - centerY / this.camera.zoom;
+        };
+        
+        // Two-finger pan
+        this.gestureHandler.onPan = (deltaX, deltaY) => {
+            this.camera.x -= deltaX / this.camera.zoom;
+            this.camera.y -= deltaY / this.camera.zoom;
+        };
+    }
+    
+    /**
+     * Fit map to viewport (for mobile initialization)
+     */
+    fitMapToViewport() {
+        const mapRadius = 1400;
+        const mapSize = mapRadius * 2;
+        const viewportMin = Math.min(window.innerWidth, window.innerHeight);
+        
+        // Calculate zoom to fit map with some padding
+        this.camera.zoom = (viewportMin * 0.8) / mapSize;
+        
+        // Center camera on map center
+        this.camera.x = 1500 - (window.innerWidth / 2) / this.camera.zoom;
+        this.camera.y = 1500 - (window.innerHeight / 2) / this.camera.zoom;
+        
+        console.log('Map auto-fitted to viewport, zoom:', this.camera.zoom.toFixed(2));
     }
     
     getCanvasCoordinates(clientX, clientY) {
@@ -113,77 +230,26 @@ class EditorApp {
         this.isPanning = false;
     }
     
-    handleTouchStart(e) {
-        e.preventDefault();
-        if (e.touches.length === 1) {
-            const touch = e.touches[0];
-            const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
-            
-            // Check if clicked on UI button
-            const action = this.ui.checkButtonClick(coords.x, coords.y);
-            if (action) {
-                this.handleAction(action);
-                return;
-            }
-            
-            // Check if Pan tool is selected
-            if (this.editor.getCurrentTool() === 'pan') {
-                this.isPanning = true;
-                this.lastPanX = coords.x;
-                this.lastPanY = coords.y;
-            } else {
-                // Start tracking for tap detection
-                this.lastPanX = coords.x;
-                this.lastPanY = coords.y;
-            }
-        }
-    }
-    
-    handleTouchMove(e) {
-        e.preventDefault();
-        if (e.touches.length === 1) {
-            const touch = e.touches[0];
-            const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
-            
-            // Pan camera if Pan tool is selected or if dragging
-            if (this.editor.getCurrentTool() === 'pan' || this.isPanning) {
-                const deltaX = (coords.x - this.lastPanX) / this.camera.zoom;
-                const deltaY = (coords.y - this.lastPanY) / this.camera.zoom;
-                this.camera.x -= deltaX;
-                this.camera.y -= deltaY;
-                this.lastPanX = coords.x;
-                this.lastPanY = coords.y;
-            }
-            
-            // Update mouse position
-            const worldX = coords.x / this.camera.zoom + this.camera.x;
-            const worldY = coords.y / this.camera.zoom + this.camera.y;
-            this.ui.updateMousePosition(worldX, worldY);
-        }
-    }
-    
-    handleTouchEnd(e) {
-        e.preventDefault();
-        if (e.changedTouches.length === 1) {
-            const touch = e.changedTouches[0];
-            const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
-            
-            // Check if it was a tap (not much movement)
-            const deltaX = Math.abs(coords.x - this.lastPanX);
-            const deltaY = Math.abs(coords.y - this.lastPanY);
-            
-            if (deltaX < 10 && deltaY < 10 && this.editor.getCurrentTool() !== 'pan') {
-                // It was a tap, place object (not in Pan mode)
-                const worldX = coords.x / this.camera.zoom + this.camera.x;
-                const worldY = coords.y / this.camera.zoom + this.camera.y;
-                this.editor.handleClick(worldX, worldY);
-            }
-            
-            this.isPanning = false;
-        }
-    }
+    // Touch events are now handled by TouchGestureHandler
+    // (removed handleTouchStart, handleTouchMove, handleTouchEnd)
     
     handleKeyDown(e) {
+        // Undo/Redo shortcuts
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            if (this.editor.undo()) {
+                console.log('Undo performed');
+            }
+            e.preventDefault();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+            if (this.editor.redo()) {
+                console.log('Redo performed');
+            }
+            e.preventDefault();
+            return;
+        }
+        
         const speed = 20;
         switch (e.key) {
             case 'ArrowUp':
@@ -232,6 +298,18 @@ class EditorApp {
     
     handleAction(action) {
         switch (action) {
+            case 'undo':
+                if (this.editor.undo()) {
+                    console.log('Undo performed');
+                }
+                break;
+                
+            case 'redo':
+                if (this.editor.redo()) {
+                    console.log('Redo performed');
+                }
+                break;
+                
             case 'clear':
                 if (confirm('Clear all objects from the map?')) {
                     this.editor.clearMap();
@@ -252,7 +330,22 @@ class EditorApp {
                 break;
                 
             case 'zoom_out':
-                this.camera.zoom = Math.max(0.3, this.camera.zoom - 0.1);
+                // Calculate center of viewport
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                
+                // Get world position at center
+                const worldCenterX = centerX / this.camera.zoom + this.camera.x;
+                const worldCenterY = centerY / this.camera.zoom + this.camera.y;
+                
+                // Zoom out
+                const newZoom = Math.max(0.3, this.camera.zoom - 0.1);
+                
+                // Adjust camera to keep center point stable
+                this.camera.x = worldCenterX - centerX / newZoom;
+                this.camera.y = worldCenterY - centerY / newZoom;
+                this.camera.zoom = newZoom;
+                
                 console.log('Zoom level:', this.camera.zoom.toFixed(1));
                 break;
                 
@@ -265,6 +358,24 @@ class EditorApp {
     exportMap() {
         // Sync game config from form to editor before exporting
         this.ui.syncGameConfigToEditor();
+        
+        // Validate map before export
+        const mapData = this.editor.getMapData();
+        const validation = this.validator.validate(mapData);
+        
+        if (!validation.valid) {
+            const errorMsg = 'Map validation failed:\n' + validation.errors.join('\n');
+            alert(errorMsg);
+            console.error('Validation errors:', validation.errors);
+            return;
+        }
+        
+        if (validation.warnings.length > 0) {
+            const warningMsg = 'Map has warnings:\n' + validation.warnings.join('\n') + '\n\nContinue with export?';
+            if (!confirm(warningMsg)) {
+                return;
+            }
+        }
         
         const json = this.editor.exportToJSON();
         
@@ -283,7 +394,7 @@ class EditorApp {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            console.log('Map exported!');
+            console.log('Map exported successfully!');
         }
     }
     

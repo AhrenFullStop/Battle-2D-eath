@@ -20,6 +20,14 @@ export class MapEditor {
         this.isDragging = false;
         this.lastMousePos = null;
         
+        // Undo/Redo system
+        this.history = [];
+        this.historyIndex = -1;
+        this.maxHistorySize = 50;
+        
+        // Push initial state
+        this.pushHistory();
+        
         // Map constants
         this.mapCenterX = 1500;
         this.mapCenterY = 1500;
@@ -52,6 +60,7 @@ export class MapEditor {
     setBackground(background) {
         this.mapData.background = background;
         this.loadBackgroundImage();
+        this.pushHistory();
     }
     
     loadBackgroundImage() {
@@ -117,10 +126,79 @@ export class MapEditor {
         return this.mapData.gameConfig || getDefaultGameConfig();
     }
     
+    /**
+     * Push current state to history
+     */
+    pushHistory() {
+        // Remove any states after current index (branching)
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        
+        // Deep clone current state
+        const state = JSON.parse(JSON.stringify(this.mapData));
+        
+        // Add to history
+        this.history.push(state);
+        
+        // Limit history size
+        if (this.history.length > this.maxHistorySize) {
+            this.history.shift();
+        } else {
+            this.historyIndex++;
+        }
+    }
+    
+    /**
+     * Undo last action
+     */
+    undo() {
+        if (!this.canUndo()) return false;
+        
+        this.historyIndex--;
+        this.restoreState(this.history[this.historyIndex]);
+        return true;
+    }
+    
+    /**
+     * Redo last undone action
+     */
+    redo() {
+        if (!this.canRedo()) return false;
+        
+        this.historyIndex++;
+        this.restoreState(this.history[this.historyIndex]);
+        return true;
+    }
+    
+    /**
+     * Check if undo is available
+     */
+    canUndo() {
+        return this.historyIndex > 0;
+    }
+    
+    /**
+     * Check if redo is available
+     */
+    canRedo() {
+        return this.historyIndex < this.history.length - 1;
+    }
+    
+    /**
+     * Restore state from history
+     */
+    restoreState(state) {
+        this.mapData = JSON.parse(JSON.stringify(state));
+        this.mapRadius = this.mapData.radius;
+        this.loadBackgroundImage();
+    }
+    
     clearMap() {
         this.mapData.bushes = [];
         this.mapData.obstacles = [];
         this.mapData.waterAreas = [];
+        this.pushHistory();
     }
     
     handleClick(worldX, worldY) {
@@ -167,10 +245,15 @@ export class MapEditor {
                 });
                 break;
         }
+        this.pushHistory();
     }
     
     eraseAtPosition(x, y) {
         const eraseRadius = 50; // Erase anything within 50 units
+        
+        const initialCount = this.mapData.bushes.length +
+                           this.mapData.obstacles.length +
+                           this.mapData.waterAreas.length;
         
         // Check bushes
         this.mapData.bushes = this.mapData.bushes.filter(bush => {
@@ -195,6 +278,15 @@ export class MapEditor {
             const dist = Math.sqrt(dx * dx + dy * dy);
             return dist > eraseRadius;
         });
+        
+        const finalCount = this.mapData.bushes.length +
+                         this.mapData.obstacles.length +
+                         this.mapData.waterAreas.length;
+        
+        // Only push to history if something was actually erased
+        if (initialCount !== finalCount) {
+            this.pushHistory();
+        }
     }
     
     exportToJSON() {
