@@ -1,0 +1,515 @@
+/* Export Modal Styles - Comprehensive modal for map export workflow */
+
+/* Modal Overlay */
+.export-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+/* Modal Container */
+.export-modal {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 12px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Modal Header */
+.export-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px;
+    border-bottom: 1px solid #334155;
+}
+
+.export-modal-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.export-modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.export-modal-close:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+.export-modal-close:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Modal Body */
+.export-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Validation Sections */
+.export-validation-section {
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    border-left: 4px solid;
+}
+
+.export-validation-error {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: #ef4444;
+}
+
+.export-validation-warning {
+    background: rgba(251, 191, 36, 0.1);
+    border-left-color: #fbbf24;
+}
+
+.export-validation-success {
+    background: rgba(34, 197, 94, 0.1);
+    border-left-color: #22c55e;
+}
+
+.export-validation-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+.export-validation-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.export-validation-error h3 {
+    color: #fca5a5;
+}
+
+.export-validation-warning h3 {
+    color: #fcd34d;
+}
+
+.export-validation-success h3 {
+    color: #86efac;
+}
+
+.export-validation-list {
+    margin: 12px 0;
+    padding-left: 24px;
+    line-height: 1.6;
+}
+
+.export-validation-list li {
+    margin-bottom: 8px;
+}
+
+.export-validation-hint {
+    margin: 12px 0 0 0;
+    font-size: 14px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* General Sections */
+.export-section {
+    margin-bottom: 24px;
+}
+
+.export-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+/* JSON Preview */
+.export-json-preview {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 300px;
+    overflow: auto;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.export-json-preview pre {
+    margin: 0;
+    white-space: pre;
+}
+
+.export-json-preview code {
+    color: #e2e8f0;
+}
+
+/* JSON Syntax Highlighting */
+.json-key {
+    color: #7dd3fc;
+}
+
+.json-string {
+    color: #86efac;
+}
+
+.json-number {
+    color: #fbbf24;
+}
+
+.json-boolean {
+    color: #c084fc;
+}
+
+/* Integration Instructions */
+.export-instructions {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.export-instruction-step {
+    margin-bottom: 24px;
+}
+
+.export-instruction-step:last-child {
+    margin-bottom: 0;
+}
+
+.export-instruction-step h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #60a5fa;
+}
+
+.export-instruction-step ol,
+.export-instruction-step ul {
+    margin: 8px 0;
+    padding-left: 24px;
+    line-height: 1.8;
+}
+
+.export-instruction-step li {
+    margin-bottom: 6px;
+}
+
+.export-instruction-step code {
+    background: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    color: #fbbf24;
+}
+
+/* Code Block */
+.export-code-block {
+    position: relative;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 12px 0;
+}
+
+.export-code-block pre {
+    margin: 0;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #e2e8f0;
+}
+
+.export-copy-code-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #334155;
+    color: #e2e8f0;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.export-copy-code-btn:hover {
+    background: #475569;
+}
+
+.export-copy-code-btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Troubleshooting Section */
+.export-troubleshooting {
+    border-top: 1px solid #334155;
+    padding-top: 16px;
+}
+
+.export-troubleshooting h4 {
+    color: #94a3b8;
+}
+
+.export-troubleshooting strong {
+    color: #f1f5f9;
+}
+
+.export-help-link {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #94a3b8;
+}
+
+/* Modal Footer */
+.export-modal-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.export-filename-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.export-filename-input label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.export-filename-input input {
+    flex: 1;
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.export-filename-input input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.export-action-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Buttons */
+.export-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.export-btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.export-btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.export-btn-primary:hover {
+    background: #2563eb;
+}
+
+.export-btn-secondary {
+    background: #475569;
+    color: #e2e8f0;
+}
+
+.export-btn-secondary:hover {
+    background: #64748b;
+}
+
+.export-btn-success {
+    background: #22c55e !important;
+    color: white !important;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .export-modal-overlay {
+        padding: 0;
+        align-items: stretch;
+    }
+    
+    .export-modal {
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        height: 100%;
+    }
+    
+    .export-modal-header {
+        padding: 16px;
+    }
+    
+    .export-modal-header h2 {
+        font-size: 20px;
+    }
+    
+    .export-modal-body {
+        padding: 16px;
+    }
+    
+    .export-validation-section {
+        padding: 16px;
+    }
+    
+    .export-json-preview {
+        font-size: 12px;
+        max-height: 200px;
+    }
+    
+    .export-instructions {
+        padding: 16px;
+    }
+    
+    .export-instruction-step h4 {
+        font-size: 15px;
+    }
+    
+    .export-instruction-step code {
+        font-size: 12px;
+    }
+    
+    .export-code-block {
+        padding: 10px;
+    }
+    
+    .export-code-block pre {
+        font-size: 12px;
+    }
+    
+    .export-modal-footer {
+        padding: 16px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .export-filename-input {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+    
+    .export-action-buttons {
+        width: 100%;
+        flex-direction: column;
+    }
+    
+    .export-btn {
+        width: 100%;
+        padding: 12px;
+    }
+    
+    .export-copy-code-btn {
+        position: static;
+        width: 100%;
+        margin-top: 8px;
+    }
+}
+
+/* Scrollbar Styling */
+.export-modal-body::-webkit-scrollbar,
+.export-json-preview::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.export-modal-body::-webkit-scrollbar-track,
+.export-json-preview::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+.export-modal-body::-webkit-scrollbar-thumb,
+.export-json-preview::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+}
+
+.export-modal-body::-webkit-scrollbar-thumb:hover,
+.export-json-preview::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* Touch Targets for Mobile */
+@media (max-width: 768px) {
+    .export-btn,
+    .export-modal-close,
+    .export-copy-code-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}

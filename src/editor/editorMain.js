@@ -5,6 +5,7 @@ import { EditorUI } from './EditorUI.js';
 import { TouchGestureHandler } from './TouchGestureHandler.js';
 import { MapValidator } from './MapValidator.js';
 import { MobileUI } from './MobileUI.js';
+import { ExportModal } from './ExportModal.js';
 
 class EditorApp {
     constructor() {
@@ -23,8 +24,9 @@ class EditorApp {
         this.camera = { x: 400, y: 400, zoom: 0.3 }; // Start zoomed out and centered
         this.ui = new EditorUI(this.canvas, this.ctx, this.editor, this.camera);
         
-        // Initialize validator
+        // Initialize validator and export modal
         this.validator = new MapValidator();
+        this.exportModal = new ExportModal();
         
         // Camera panning
         this.isPanning = false;
@@ -363,42 +365,26 @@ class EditorApp {
         const mapData = this.editor.getMapData();
         const validation = this.validator.validate(mapData);
         
-        if (!validation.valid) {
-            const errorMsg = 'Map validation failed:\n' + validation.errors.join('\n');
-            alert(errorMsg);
-            console.error('Validation errors:', validation.errors);
-            return;
-        }
+        // Show export modal with validation results
+        // Modal will handle showing errors, warnings, or success with export options
+        this.exportModal.show(mapData, validation);
         
-        if (validation.warnings.length > 0) {
-            const warningMsg = 'Map has warnings:\n' + validation.warnings.join('\n') + '\n\nContinue with export?';
-            if (!confirm(warningMsg)) {
+        console.log('Export modal opened with validation results');
+    }
+    
+    importMap() {
+        // Warn if there are unsaved changes
+        const currentData = this.editor.getMapData();
+        const hasContent = currentData.bushes.length > 0 ||
+                          currentData.obstacles.length > 0 ||
+                          currentData.waterAreas.length > 0;
+        
+        if (hasContent) {
+            if (!confirm('You have unsaved changes. Import will replace the current map. Continue?')) {
                 return;
             }
         }
         
-        const json = this.editor.exportToJSON();
-        
-        // Create a download link
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Prompt for filename
-        const filename = prompt('Enter map filename:', 'custom-map.json');
-        if (filename) {
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            console.log('Map exported successfully!');
-        }
-    }
-    
-    importMap() {
         // Create file input
         const input = document.createElement('input');
         input.type = 'file';
@@ -406,22 +392,55 @@ class EditorApp {
         
         input.onchange = (e) => {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    // Try to parse JSON first
+                    const jsonData = JSON.parse(event.target.result);
+                    
+                    // Import the map
                     const success = this.editor.importFromJSON(event.target.result);
-                    if (success) {
-                        // Sync the background dropdown with imported map
-                        this.ui.syncBackgroundSelector();
-                        // Sync the game config to the form
-                        this.ui.loadGameConfigIntoForm();
-                        alert('Map imported successfully!');
-                    } else {
-                        alert('Error importing map. Please check the JSON format.');
+                    if (!success) {
+                        alert('Error importing map. The JSON structure may be invalid.');
+                        return;
                     }
-                };
-                reader.readAsText(file);
-            }
+                    
+                    // Sync UI with imported map
+                    this.ui.syncBackgroundSelector();
+                    this.ui.loadGameConfigIntoForm();
+                    
+                    // Validate the imported map
+                    const mapData = this.editor.getMapData();
+                    const validation = this.validator.validate(mapData);
+                    
+                    // Show results
+                    if (validation.errors.length > 0) {
+                        const errorMsg = 'Map imported with errors:\n' + validation.errors.join('\n');
+                        alert(errorMsg + '\n\nYou should fix these before using the map.');
+                        console.error('Import validation errors:', validation.errors);
+                    } else if (validation.warnings.length > 0) {
+                        const warningMsg = 'Map imported with warnings:\n' + validation.warnings.join('\n');
+                        console.warn('Import validation warnings:', validation.warnings);
+                        alert('Map imported successfully!\n\n' + warningMsg);
+                    } else {
+                        alert('Map imported successfully! ✓');
+                    }
+                    
+                    console.log('Map imported:', mapData.name);
+                    
+                } catch (error) {
+                    console.error('JSON parse error:', error);
+                    alert('Error parsing JSON file: ' + error.message + '\n\nPlease check the file format.');
+                }
+            };
+            
+            reader.onerror = () => {
+                alert('Error reading file. Please try again.');
+            };
+            
+            reader.readAsText(file);
         };
         
         input.click();
