@@ -3051,8 +3051,23 @@ export class StartScreen {
     checkMultiplayerStartRequested() {
         const requested = this.menuState === 'multiplayer' && this.multiplayerStartRequested;
         this.multiplayerStartRequested = false;
-        const session = this.multiplayerStartSession;
+
+        const rawSession = this.multiplayerStartSession;
         this.multiplayerStartSession = null;
-        return requested ? session : null;
+
+        if (!requested || !rawSession) return null;
+
+        // Wrap to match expected interface in main.js
+        return {
+            session: {
+                role: rawSession.role,
+                seed: rawSession.seed,
+                mapFile: rawSession.mapFile,
+                connection: rawSession.connection
+            },
+            characterType: rawSession.characterType,
+            selectedMap: rawSession.selectedMap,
+            isHost: rawSession.role === 'host'
+        };
     }
 }
