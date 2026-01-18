@@ -102,17 +102,33 @@ export class WebRTCManualConnection {
     }
 
     close() {
+        // Prevent re-entry or late callbacks
+        this.onStatus = null;
+        this.onMessage = null;
+
         try {
-            if (this.channel) this.channel.close();
-        } catch {
-            // ignore
-        }
+            if (this.channel) {
+                this.channel.onopen = null;
+                this.channel.onclose = null;
+                this.channel.onerror = null;
+                this.channel.onmessage = null;
+                this.channel.close();
+            }
+        } catch { /* ignore */ }
+
         try {
-            this.pc.close();
-        } catch {
-            // ignore
-        }
-        this.setStatus('closed');
+            if (this.pc) {
+                this.pc.onconnectionstatechange = null;
+                this.pc.oniceconnectionstatechange = null;
+                this.pc.close();
+            }
+        } catch { /* ignore */ }
+
+        this.channel = null;
+        // We don't null this.pc immediately to allow checking state? 
+        // Actually safe to just leave it closed.
+
+        this.status = 'closed';
     }
 
     async createOfferCode() {

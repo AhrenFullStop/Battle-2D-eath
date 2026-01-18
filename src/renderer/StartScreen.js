@@ -28,6 +28,9 @@ import { META_CONFIG } from '../config/metaProgression.js';
 import { loadProfile, saveProfile, getXpProgress, purchaseUpgrade, checkRequirements, getUpgradeLevel } from '../core/ProfileStore.js';
 import { WebRTCManualConnection, getOptionalPublicStunIceServers } from '../net/WebRTCManualConnection.js';
 import { randomSeedUint32 } from '../net/prng.js';
+// Import QR Code generator (vendored)
+import qrcode from '../vendor/qrcode.js'; 
+
 
 export class StartScreen {
     constructor(canvas, ctx, assetLoader = null) {
@@ -145,7 +148,8 @@ export class StartScreen {
             localReady: false,
             countdown: { active: false, secondsLeft: 0, endsAtMs: 0 },
             seed: null,
-            mapFile: 'facey.json'
+            mapFile: 'facey.json',
+            joinLink: '' // New: Link to share
         };
 
         this.mpDom = null;
@@ -178,7 +182,38 @@ export class StartScreen {
         // DOM modal (minimal) for map settings
         this.ensureMapSettingsModal();
 
-        // DOM overlay for Multiplayer lobby (created lazily)
+        // Check for join link in URL hash
+        this.checkJoinLink();
+    }
+
+    checkJoinLink() {
+        if (window.location.hash.startsWith('#join=')) {
+            try {
+                // Parse the hash
+                const base64Offer = window.location.hash.substring('#join='.length);
+                const offerCode = atob(base64Offer);
+                const parsed = JSON.parse(offerCode);
+
+                if (parsed && parsed.type === 'offer' && parsed.sdp) {
+                    console.log('Auto-joining via link...');
+                    this.menuState = 'multiplayer';
+
+                    // Pre-seed the lobby
+                    this.mp.offerCode = offerCode;
+                    this.mp.role = 'client';
+
+                    // Trigger join flow after a brief delay to ensure DOM exists
+                    setTimeout(() => {
+                        this.showMultiplayerLobbyDom();
+                        const btnJoin = this.mpDom.root.querySelector('[data-mp="join"]');
+                        if (btnJoin) btnJoin.click();
+                    }, 100);
+                }
+            } catch (e) {
+                console.error('Failed to parse (join link:', e);
+                window.location.hash = ''; // Clear bad hash
+            }
+        }
     }
 
     ensureMultiplayerLobbyDom() {
@@ -190,7 +225,10 @@ export class StartScreen {
 
         root.innerHTML = `
             <div class="mp-panel">
-                <div class="mp-row mp-title">Multiplayer Lobby</div>
+                <div class="mp-row mp-title">
+                    Multiplayer Lobby
+                    <div class="mp-lobby-count" data-mp="lobbyCount">Players: 1/2</div>
+                </div>
 
                 <div class="mp-row">
                     <div class="mp-label">Status</div>
@@ -208,6 +246,13 @@ export class StartScreen {
                     <button class="mp-btn" data-mp="host">Host</button>
                     <button class="mp-btn" data-mp="join">Join</button>
                     <button class="mp-btn" data-mp="disconnect" disabled>Disconnect</button>
+                </div>
+
+                <!-- QR Code Section (Host Only) -->
+                <div class="mp-row mp-qr-container" data-mp="qrContainer" style="display:none; text-align:center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                     <div data-mp="qrCode"></div>
+                     <div style="font-size: 12px; color: #aaa; margin-top: 5px;">Scan to Join</div>
+                     <div style="margin-top:5px;"><a href="#" data-mp="shareLink" target="_blank" style="color:#4af; font-size:12px;">Open Join Link</a></div>
                 </div>
 
                 <div class="mp-row mp-split">
@@ -229,8 +274,8 @@ export class StartScreen {
                     </div>
                 </div>
 
-                <div class="mp-row mp-buttons">
-                    <button class="mp-btn mp-primary" data-mp="ready" disabled>Ready</button>
+                <div class="mp-row mp-buttons" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+                    <button class="mp-btn mp-primary" data-mp="ready" disabled>Ready to Battle</button>
                     <button class="mp-btn" data-mp="unready" disabled>Cancel</button>
                 </div>
 
@@ -247,6 +292,10 @@ export class StartScreen {
         const offerEl = q('[data-mp="offer"]');
         const answerEl = q('[data-mp="answer"]');
         const countdownEl = q('[data-mp="countdown"]');
+        const lobbyCountEl = q('[data-mp="lobbyCount"]');
+        const qrContainerEl = q('[data-mp="qrContainer"]');
+        const qrCodeEl = q('[data-mp="qrCode"]');
+        const shareLinkEl = q('[data-mp="shareLink"]');
 
         const btnHost = q('[data-mp="host"]');
         const btnJoin = q('[data-mp="join"]');
@@ -263,11 +312,44 @@ export class StartScreen {
         const render = () => {
             statusEl.textContent = this.mp.statusText;
             offerEl.value = this.mp.offerCode || '';
+            const isConnected = this.mp.connection && this.mp.connection.isConnected();
+
+            // Visual Lobby Count
+            lobbyCountEl.textContent = isConnected ? "Players: 2/2" : "Players: 1/2";
+            lobbyCountEl.style.color = isConnected ? "#4ade80" : "#94a3b8";
+
+            // QR & Link Display (Host only, providing we have an offer but no peer yet)
+            if (this.mp.role === 'host' && this.mp.offerCode && !isConnected) {
+                qrContainerEl.style.display = 'block';
+                // Update QR only if offer changed significantly or first render
+                if (this.mp.joinLink) {
+                    shareLinkEl.href = this.mp.joinLink;
+                    shareLinkEl.textContent = "Open Join Link (Test)";
+
+                    // Render QR if empty
+                    if (!qrCodeEl.hasChildNodes()) {
+                        try {
+                            const qr = qrcode(0, 'L');
+                            qr.addData(this.mp.joinLink);
+                            qr.make();
+                            qrCodeEl.innerHTML = qr.createImgTag(3, 8); // 3px cells
+                        } catch (e) {
+                            qrCodeEl.textContent = "(QR Error)";
+                        }
+                    }
+                }
+            } else {
+                qrContainerEl.style.display = 'none';
+                qrCodeEl.innerHTML = ''; // Clear when hidden to force redraw next time
+            }
+
             if (this.mp.role === 'client') {
                 // joiner pastes offer; answer becomes generated output
                 // Keep offer editable for joiner.
                 offerEl.readOnly = false;
-                btnMakeAnswer.disabled = !this.mp.offerCode || !!this.mp.connection;
+                // FIX: Check for connection existence, not just truthiness, but logical readyness 
+                // However, logic below: we need connection object + offer code to make answer.
+                btnMakeAnswer.disabled = !this.mp.offerCode || !this.mp.connection || !!this.mp.answerCode; 
                 btnApplyAnswer.disabled = true;
                 btnCopyAnswer.disabled = !this.mp.answerCode;
                 btnCopyOffer.disabled = true;
@@ -462,7 +544,13 @@ export class StartScreen {
             wireConnection(conn);
             try {
                 this.mp.offerCode = await conn.createOfferCode();
-                setStatus('Offer ready. Send it to your friend.');
+
+                // Generate Join Link
+                const base64Offer = btoa(this.mp.offerCode);
+                const baseUrl = window.location.href.split('#')[0];
+                this.mp.joinLink = `${baseUrl}#join=${base64Offer}`;
+
+                setStatus('Offer ready. Share Link or QR code!');
             } catch (e) {
                 console.error(e);
                 setStatus('Failed to create offer');

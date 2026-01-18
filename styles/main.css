@@ -135,3 +135,19 @@ body {
     font-size: 14px;
     font-weight: 600;
 }
+
+.mp-lobby-count {
+    float: right;
+    font-size: 14px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.mp-qr-container {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

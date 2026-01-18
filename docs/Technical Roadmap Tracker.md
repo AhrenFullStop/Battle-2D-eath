@@ -486,9 +486,9 @@ Milestone Completion Notes (fill in when done):
 
 
 ### Side-notes: 
-- [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible 
+- [] Map editor: map editor doesn't load images from directory, instead from manifest. this is dumb, it should fetch them based on what images we have availible. 
 - [] Map Creation: consider swapping out rocks and trees for png's (maybe some color tweaks allowed) rather than transparent geometry.
-- [] Player stats: player stats on the start screen (when you click and open your xp card) are too closely bundled together the text is too tight. add some madding to make it much nicer. 
+- [] Player stats UI: player stats on the start screen (when you click and open your xp card) are too closely bundled together the text is too tight. add some madding to make it much nicer. 
 - [] Gameplay: Sometimes I get instant death from bot damage hit. It may be the bomb type. Is bot damage the same as ours?
 - [] Weapon - Bomb: Right now the bomb weapon is acting just like a spear, shooting down a straight line. However what we want is for the bomb to "land" where the player is aiming and then cause area damage around that landing spot. The visuals need to communicate this: 
   - Arc for aim render to illustrate its a "thrown" weapon. 
@@ -503,7 +503,7 @@ Milestone Completion Notes (fill in when done):
 
 On device 2; I click 'Join' then paste in the offer block. I cant do anything further. no other blocks are clickable and clicking on join again will clear the offer/join code.
 
-The menu and user journey is very complex and hard to understand. let's make this better.
+The menu and user journey is too complex and hard to understand. let's make this better and simpler.
 
 
 - [x] Refactor: Comprehensive codebase refactoring completed (Dec 2025)
