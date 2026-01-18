@@ -892,6 +892,9 @@ export class StartScreen {
         }
     }
 
+    async loadBuildVersion() {
+        try {
+            const url = new URL('build-info.json', document.baseURI);
             url.searchParams.set('t', String(Date.now()));
 
             const res = await fetch(url.toString(), { cache: 'no-store' });
@@ -3188,7 +3191,5 @@ export class StartScreen {
             selectedMap: rawSession.selectedMap,
             isHost: rawSession.role === 'host'
         };
-    }
-}
     }
 }
