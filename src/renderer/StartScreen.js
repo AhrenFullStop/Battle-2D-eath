@@ -826,19 +826,37 @@ export class StartScreen {
         ctx.textAlign = 'center';
         ctx.fillText('SETTINGS', this.canvas.width / 2, y + 50);
 
-        // Volume Toggle
+        // Audio Toggle (Radio/Checkbox Style)
         const vol = this.settingsManager ? this.settingsManager.get('volume') : 0.5;
-        const isMuted = vol === 0;
+        const isEnabled = vol > 0;
 
-        const btnY = y + 120;
-        ctx.fillStyle = isMuted ? '#ef4444' : '#22c55e';
-        ctx.beginPath();
-        ctx.roundRect((this.canvas.width - 200) / 2, btnY, 200, 50, 10);
-        ctx.fill();
+        const rowY = y + 120;
+        const centerX = this.canvas.width / 2;
 
+        // Label
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 18px Arial';
-        ctx.fillText(isMuted ? 'UNMUTE SOUND' : 'MUTE SOUND', this.canvas.width / 2, btnY + 32);
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Enable Audio', centerX - 20, rowY);
+
+        // Radio Box
+        const boxSize = 24;
+        const boxX = centerX + 10;
+        const boxY = rowY - boxSize / 2;
+
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(boxX + boxSize / 2, boxY + boxSize / 2, 12, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (isEnabled) {
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.arc(boxX + boxSize / 2, boxY + boxSize / 2, 7, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // Close Button
         const closeY = y + 220;
@@ -849,6 +867,7 @@ export class StartScreen {
 
         ctx.fillStyle = '#fff';
         ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
         ctx.fillText('CLOSE', this.canvas.width / 2, closeY + 26);
     }
 
@@ -856,24 +875,24 @@ export class StartScreen {
         const width = Math.min(400, this.canvas.width * 0.85);
         const height = 300;
         const panelY = (this.canvas.height - height) / 2;
+        const panelX = (this.canvas.width - width) / 2;
 
-        // Volume Toggle Bounds
-        const btnY = panelY + 120;
-        const btnX = (this.canvas.width - 200) / 2;
-
-        if (x >= btnX && x <= btnX + 200 && y >= btnY && y <= btnY + 50) {
+        // Audio Toggle Hit Area
+        const rowY = panelY + 120;
+        const centerX = this.canvas.width / 2;
+        // Hit area covers label + box
+        if (x >= centerX - 140 && x <= centerX + 60 && y >= rowY - 25 && y <= rowY + 25) {
             if (this.settingsManager) {
                 const currentVol = this.settingsManager.get('volume');
-                const newVol = currentVol === 0 ? 0.5 : 0;
+                const newVol = currentVol > 0 ? 0 : 0.5;
                 this.settingsManager.set('volume', newVol);
 
-                // Also update global audio manager if accessible (dirty hack via window.game)
                 if (window.game && window.game.audioManager) {
                     window.game.audioManager.setVolume(newVol);
-                    if (newVol > 0) window.game.audioManager.playSynthesized('blaster'); // Test sound
+                    if (newVol > 0) window.game.audioManager.playSynthesized('blaster');
                 }
             }
-            return;
+            return true;
         }
 
         // Close Button
@@ -882,14 +901,16 @@ export class StartScreen {
 
         if (x >= closeX && x <= closeX + 120 && y >= closeY && y <= closeY + 40) {
             this.showSettings = false;
-            return;
+            return true;
         }
 
         // Click outside panel to close
-        const panelX = (this.canvas.width - width) / 2;
         if (x < panelX || x > panelX + width || y < panelY || y > panelY + height) {
             this.showSettings = false;
+            return true;
         }
+
+        return true; // Consume event if overlay is open
     }
 
     async loadBuildVersion() {
@@ -1362,6 +1383,11 @@ export class StartScreen {
             return null;
         }
         
+        if (this.showSettings) {
+            this.handleSettingsTouch(coords.x, coords.y);
+            return null;
+        }
+
         // Swipe navigation
         const deltaX = coords.x - this.dragStartX;
         const deltaY = coords.y - this.dragStartY;
@@ -1460,6 +1486,11 @@ export class StartScreen {
     
     handleMouseUp(event) {
         const coords = this.getCanvasCoordinates(event.clientX, event.clientY);
+
+        if (this.showSettings) {
+            this.handleSettingsTouch(coords.x, coords.y);
+            return;
+        }
 
         // Navigation states (home / multiplayer)
         if (this.menuState === 'home') {

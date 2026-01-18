@@ -110,7 +110,7 @@ export class MultiplayerMatchController {
      * @param {boolean} isHost - Whether this player is host
      * @returns {Promise<void>}
      */
-    async startMatch(session, playerCharacterType, selectedMap, isHost) {
+    async startMatch(session, playerCharacterType, selectedMap, isHost, audioManager) {
         this.session = session;
         console.log('Starting multiplayer match:', session?.role);
 
@@ -122,7 +122,7 @@ export class MultiplayerMatchController {
 
         // Initialize match
         this.matchInitializer = new MatchInitializer(this.canvas, this.gameState, this.assetLoader);
-        const { systems, spawnManager, playerCharacter } = await this.matchInitializer.initializeMultiplayerMatch(session, playerCharacterType, selectedMap, this.profile);
+        const { systems, spawnManager, playerCharacter } = await this.matchInitializer.initializeMultiplayerMatch(session, playerCharacterType, selectedMap, this.profile, audioManager);
 
         // Create orchestrator
         this.orchestrator = new GameOrchestrator(this.gameState, systems, systems.renderer, spawnManager, playerCharacter, this.profile);
