@@ -277,9 +277,11 @@ export class MatchInitializer {
         // Create players (Bolt vs Bolt for the MVP slice)
         const localIsHost = session.role === 'host';
         const localPlayerIndex = localIsHost ? 0 : 1;
+        console.log(`initMultiplayerGame: Role=${session.role}, LocalIdx=${localPlayerIndex}, Seed=${session.seed}`);
 
         // Deterministic spawns
         const rng = createMulberry32((session.seed >>> 0) || 1);
+        console.log('Generating spawns...');
         const spawns = spawnManager.generateCharacterSpawns(mapConfig, 2, {
             clearanceRadius: 70,
             minSpacing: 520,

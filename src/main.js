@@ -161,10 +161,12 @@ class Game {
 
     async startMultiplayerMatch(session, playerCharacterType, selectedMap, isHost) {
         console.log('Starting multiplayer match:', session?.role);
+        console.log('Session data:', JSON.stringify({ ...session, connection: 'Active' }));
 
         // Load a deterministic map file (no procedural randomness)
         const mapFile = session.mapFile || 'facey.json';
         try {
+            console.log('Loading multiplayer map:', mapFile);
             const mapPath = `maps/${mapFile}`;
             const mapUrl = resolveMapsUrl(mapFile);
             const response = await fetch(mapUrl);
@@ -181,25 +183,38 @@ class Game {
         }
 
         // Remove start screen listeners but KEEP the active multiplayer connection.
+        console.log('Removing StartScreen listeners...');
         this.startScreen.removeEventListeners({ preserveMultiplayerConnection: true });
 
         // Ensure assets are loaded
         if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
+            console.log('Loading game assets for MP...');
             await this.assetLoader.loadGameAssets();
         }
 
         // Initialize multiplayer match using MultiplayerMatchController
+        console.log('Initializing MultiplayerMatchController...');
         this.multiplayerController = new MultiplayerMatchController(this, this.canvas, this.gameState, this.assetLoader, this.profile);
-        await this.multiplayerController.startMatch(session, playerCharacterType, { mapData: selectedMap }, isHost);
+
+        console.log('Calling multiplayerController.startMatch...');
+        try {
+            await this.multiplayerController.startMatch(session, playerCharacterType, { mapData: selectedMap }, isHost);
+        } catch (e) {
+            console.error('❌ CRASH in multiplayerController.startMatch:', e);
+            throw e;
+        }
 
         // Initialize game loop
+        console.log('Initializing GameLoop...');
         this.gameLoop = new GameLoop(
             (deltaTime) => this.update(deltaTime),
             (interpolation) => this.render(interpolation)
         );
 
         this.phase = 'playing';
+        console.log('Starting GameLoop...');
         this.gameLoop.start();
+        console.log('Multiplayer Match successfully started!');
     }
     
 
