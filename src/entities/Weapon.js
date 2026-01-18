@@ -3,6 +3,12 @@
 import { Entity } from './Entity.js';
 import { Vector2D } from '../utils/Vector2D.js';
 
+export const PROJECTILE_STATES = {
+    FLYING: 'flying',
+    LANDED: 'landed',
+    DETONATED: 'detonated'
+};
+
 export class Weapon extends Entity {
     constructor(config) {
         super();
@@ -23,6 +29,8 @@ export class Weapon extends Entity {
         this.coneAngle = config.coneAngle || 0;
         this.projectileSpeed = config.projectileSpeed || 0;
         this.explosionRadius = config.explosionRadius || 0;
+        this.arcHeight = config.arcHeight || 0;
+        this.fuseTime = config.fuseTime || 0;
         this.burstCount = config.burstCount || 1;
         this.burstDelay = config.burstDelay || 0;
         
@@ -90,6 +98,9 @@ export class Weapon extends Entity {
                 break;
             case 'aoe':
                 attackData.explosionRadius = this.explosionRadius;
+                attackData.arcHeight = this.arcHeight;
+                attackData.fuseTime = this.fuseTime;
+                attackData.projectileSpeed = this.projectileSpeed;
                 break;
             case 'burst':
                 attackData.burstCount = this.burstCount;
@@ -161,13 +172,15 @@ export class Projectile extends Entity {
         super();
         
         this.weaponType = attackData.weaponType;
+        this.attackType = attackData.attackType;
         this.position = attackData.position.clone();
         this.damage = attackData.damage;
         this.range = attackData.range;
         this.color = attackData.color;
         this.owner = attackData.owner;
         
-        // Movement
+        // Movement/State
+        this.state = PROJECTILE_STATES.FLYING;
         const speed = attackData.projectileSpeed || 500;
         this.velocity = new Vector2D(
             Math.cos(attackData.angle) * speed,
@@ -178,18 +191,47 @@ export class Projectile extends Entity {
         this.startPosition = attackData.position.clone();
         this.distanceTraveled = 0;
         
+        // AoE / Arcing
+        this.isAoe = attackData.attackType === 'aoe';
+        this.explosionRadius = attackData.explosionRadius || 0;
+        this.arcHeight = attackData.arcHeight || 0;
+        this.height = 0; // Visual height offset
+        this.fuseTime = (attackData.fuseTime || 0) / 1000; // Convert to seconds
+        this.fuseElapsed = 0;
+
+        if (this.isAoe) {
+            this.targetPosition = new Vector2D(
+                this.startPosition.x + Math.cos(attackData.angle) * this.range,
+                this.startPosition.y + Math.sin(attackData.angle) * this.range
+            );
+            this.totalFlightTime = this.range / speed;
+            this.elapsedFlightTime = 0;
+        }
+
         // Visual
         this.radius = 5;
         this.hasHit = false;
     }
     
-    // Update projectile movement
+    // Update projectile movement and logic
     update(deltaTime) {
-        if (this.hasHit) {
+        if (this.state === PROJECTILE_STATES.DETONATED || !this.active) {
             this.active = false;
             return;
         }
         
+        if (this.state === PROJECTILE_STATES.FLYING) {
+            if (this.isAoe) {
+                this.updateArcingFlight(deltaTime);
+            } else {
+                this.updateLinearFlight(deltaTime);
+            }
+        } else if (this.state === PROJECTILE_STATES.LANDED) {
+            this.updateLanded(deltaTime);
+        }
+    }
+
+    updateLinearFlight(deltaTime) {
         // Move projectile
         const movement = this.velocity.clone().multiply(deltaTime);
         this.position.add(movement);
@@ -203,10 +245,46 @@ export class Projectile extends Entity {
         }
     }
     
-    // Mark projectile as having hit something
+    updateArcingFlight(deltaTime) {
+        this.elapsedFlightTime += deltaTime;
+        const t = Math.min(1, this.elapsedFlightTime / this.totalFlightTime);
+
+        // Update ground position
+        this.position.x = this.startPosition.x + (this.targetPosition.x - this.startPosition.x) * t;
+        this.position.y = this.startPosition.y + (this.targetPosition.y - this.startPosition.y) * t;
+
+        // Update height (parabolic arc: h = 4 * arcHeight * t * (1-t))
+        this.height = 4 * this.arcHeight * t * (1 - t);
+
+        // Check if landed
+        if (t >= 1) {
+            this.state = PROJECTILE_STATES.LANDED;
+            this.height = 0;
+            // If no fuse, detonate immediately
+            if (this.fuseTime <= 0) {
+                this.detonate();
+            }
+        }
+    }
+
+    updateLanded(deltaTime) {
+        this.fuseElapsed += deltaTime;
+        if (this.fuseElapsed >= this.fuseTime) {
+            this.detonate();
+        }
+    }
+
+    // Trigger detonation
+    detonate() {
+        this.state = PROJECTILE_STATES.DETONATED;
+    }
+
+    // Mark projectile as having hit something (for linear projectiles)
     hit() {
-        this.hasHit = true;
-        this.active = false;
+        if (!this.isAoe) {
+            this.hasHit = true;
+            this.active = false;
+        }
     }
 }
 

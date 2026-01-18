@@ -43,6 +43,7 @@ export const WEAPON_TYPES = {
         baseCooldown: 3000,
         explosionRadius: 80,
         arcHeight: 100,
+        fuseTime: 500, // milliseconds
         tierMultipliers: {
             damage: [1.0, 1.4, 1.8],
             range: [1.0, 1.3, 1.6]

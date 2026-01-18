@@ -1,4 +1,5 @@
 // Weapon renderer for drawing weapon effects, projectiles, and damage numbers
+import { PROJECTILE_STATES } from '../entities/Weapon.js';
 
 export class WeaponRenderer {
     constructor(ctx, assetLoader = null) {
@@ -83,18 +84,31 @@ export class WeaponRenderer {
         const ctx = this.ctx;
         
         // Draw expanding circle
-        const radius = effect.explosionRadius * (1 - effect.alpha);
+        const progress = 1 - effect.alpha;
+        const radius = effect.explosionRadius * progress;
         
+        // Draw primary blast
         ctx.fillStyle = effect.color;
-        ctx.globalAlpha = effect.alpha * 0.5;
+        ctx.globalAlpha = effect.alpha * 0.6;
         ctx.beginPath();
         ctx.arc(effect.position.x, effect.position.y, radius, 0, Math.PI * 2);
         ctx.fill();
         
+        // Draw inner flash
+        if (progress < 0.5) {
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = (1 - progress * 2) * 0.8;
+            ctx.beginPath();
+            ctx.arc(effect.position.x, effect.position.y, radius * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         // Draw outline
         ctx.strokeStyle = effect.glowColor;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 5 * effect.alpha;
         ctx.globalAlpha = effect.alpha;
+        ctx.beginPath();
+        ctx.arc(effect.position.x, effect.position.y, radius, 0, Math.PI * 2);
         ctx.stroke();
     }
     
@@ -104,16 +118,41 @@ export class WeaponRenderer {
         
         ctx.save();
         
+        if (projectile.state === PROJECTILE_STATES.FLYING) {
+            this.renderFlyingProjectile(projectile);
+        } else if (projectile.state === PROJECTILE_STATES.LANDED) {
+            this.renderLandedProjectile(projectile);
+        }
+
+        ctx.restore();
+    }
+
+    // Render projectile while in flight
+    renderFlyingProjectile(projectile) {
+        const ctx = this.ctx;
+        const x = projectile.position.x;
+        const y = projectile.position.y;
+        const h = projectile.height || 0;
+
+        // Draw shadow at ground position
+        if (h > 5) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.ellipse(x, y, projectile.radius * 1.5, projectile.radius * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         // Draw projectile trail
         const trailLength = 20;
-        const trailX = projectile.position.x - projectile.velocity.x * 0.02;
-        const trailY = projectile.position.y - projectile.velocity.y * 0.02;
+        const trailX = x - projectile.velocity.x * 0.02;
+        const trailY = y - h - projectile.velocity.y * 0.02;
         
         const gradient = ctx.createLinearGradient(
             trailX,
             trailY,
-            projectile.position.x,
-            projectile.position.y
+            x,
+            y - h
         );
         gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
         gradient.addColorStop(1, projectile.color);
@@ -123,15 +162,16 @@ export class WeaponRenderer {
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(trailX, trailY);
-        ctx.lineTo(projectile.position.x, projectile.position.y);
+        ctx.lineTo(x, y - h);
         ctx.stroke();
         
         // Draw projectile body
+        ctx.globalAlpha = 1.0;
         ctx.fillStyle = projectile.color;
         ctx.beginPath();
         ctx.arc(
-            projectile.position.x,
-            projectile.position.y,
+            x,
+            y - h,
             projectile.radius,
             0,
             Math.PI * 2
@@ -142,8 +182,45 @@ export class WeaponRenderer {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.stroke();
+    }
+
+    // Render projectile while landed (waiting for fuse)
+    renderLandedProjectile(projectile) {
+        const ctx = this.ctx;
+        const x = projectile.position.x;
+        const y = projectile.position.y;
+
+        // Draw warning indicator (expanding ring)
+        const fuseProgress = projectile.fuseElapsed / projectile.fuseTime;
+        const warningRadius = projectile.explosionRadius * fuseProgress;
+
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.01) * 0.2;
+        ctx.beginPath();
+        ctx.arc(x, y, projectile.explosionRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(x, y, warningRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw bomb on ground
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = projectile.color;
+        ctx.beginPath();
+        ctx.arc(x, y, projectile.radius * 1.5, 0, Math.PI * 2);
+        ctx.fill();
         
-        ctx.restore();
+        // Flicker effect for imminent explosion
+        if (fuseProgress > 0.7) {
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = Math.sin(Date.now() * 0.05) * 0.5 + 0.5;
+            ctx.beginPath();
+            ctx.arc(x, y, projectile.radius * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
     
     // Render damage number

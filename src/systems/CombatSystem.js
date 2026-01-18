@@ -1,6 +1,6 @@
 // Combat system for handling weapon firing, damage calculation, and hit detection
 
-import { WeaponEffect, Projectile, DamageNumber } from '../entities/Weapon.js';
+import { WeaponEffect, Projectile, DamageNumber, PROJECTILE_STATES } from '../entities/Weapon.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { MAP_CONFIG } from '../config/map.js';
 import { circleRectCollision } from '../utils/collision.js';
@@ -35,14 +35,23 @@ export class CombatSystem {
             
             // Check for hits if still active
             if (projectile.active) {
-                // Check obstacle collisions first
-                if (this.checkProjectileObstacleCollision(projectile)) {
-                    projectile.hit();
+                // Check for detonation (AoE)
+                if (projectile.state === PROJECTILE_STATES.DETONATED) {
+                    this.createExplosion(projectile.position, projectile.explosionRadius, projectile.damage, projectile.owner);
                     return false;
                 }
-                
-                // Then check character collisions
-                this.checkProjectileCollisions(projectile);
+
+                // Only check collisions for non-AOE projectiles in flight
+                if (!projectile.isAoe) {
+                    // Check obstacle collisions first
+                    if (this.checkProjectileObstacleCollision(projectile)) {
+                        projectile.hit();
+                        return false;
+                    }
+
+                    // Then check character collisions
+                    this.checkProjectileCollisions(projectile);
+                }
             }
             
             return projectile.active;
@@ -68,7 +77,8 @@ export class CombatSystem {
 
                 // Check if it's time to fire next shot
                 if (burst.shotsRemaining > 0 && this.currentTick >= burst.nextShotTick) {
-                    this.fireBurstShot(burst);
+                    const shotIndex = (burst.burstCount || 3) - burst.shotsRemaining;
+                    this.fireBurstShot(burst, shotIndex);
                     burst.shotsRemaining--;
 
                     if (burst.shotsRemaining > 0) {
@@ -199,10 +209,8 @@ export class CombatSystem {
     
     // Handle AoE attack (Bomb)
     handleAoeAttack(attackData) {
-        // Create projectile that travels to target location
+        // Projectile constructor now handles state and targets
         const projectile = new Projectile(attackData);
-        projectile.isAoe = true;
-        projectile.explosionRadius = attackData.explosionRadius;
         this.projectiles.push(projectile);
     }
     
@@ -216,25 +224,35 @@ export class CombatSystem {
 
         // Initialize burst state on the weapon
         weapon.burstState = {
+            burstCount: burstCount,
             shotsRemaining: burstCount,
             nextShotTick: currentTick,
             attackData: attackData,
             ticksPerShot: ticksPerShot
         };
 
-        // Fire first shot immediately
-        this.fireBurstShot(weapon.burstState);
+        // Fire first shot immediately (index 0)
+        this.fireBurstShot(weapon.burstState, 0);
         weapon.burstState.shotsRemaining--;
         weapon.burstState.nextShotTick = currentTick + ticksPerShot;
     }
 
     // Fire a single burst shot
-    fireBurstShot(burstState) {
+    fireBurstShot(burstState, shotIndex) {
         if (this.disposed) return;
 
         const projectile = new Projectile(burstState.attackData);
-        // Add slight spread to burst
-        const spread = (Math.random() - 0.5) * 0.1;
+
+        // Deterministic spread: fan out based on shot index
+        const totalShots = burstState.burstCount || 3;
+        const spreadWidth = (burstState.attackData.coneAngle || 5) * Math.PI / 180;
+
+        // spread will be between -halfWidth and +halfWidth
+        // shotIndex 0 -> -halfWidth, totalShots-1 -> +halfWidth
+        const spread = totalShots > 1
+            ? (shotIndex / (totalShots - 1) - 0.5) * spreadWidth
+            : 0;
+
         projectile.velocity.rotate(spread);
         this.projectiles.push(projectile);
     }
@@ -285,6 +303,20 @@ export class CombatSystem {
     
     // Create explosion for AoE attacks
     createExplosion(position, radius, damage, owner) {
+        // Add visual effect for the explosion
+        const explosionEffect = new WeaponEffect({
+            attackType: 'aoe',
+            position: position.clone(),
+            explosionRadius: radius,
+            color: '#ff4400',
+            glowColor: '#ffff00',
+            angle: 0,
+            range: radius,
+            damage: damage,
+            owner: owner
+        });
+        this.weaponEffects.push(explosionEffect);
+
         this.gameState.characters.forEach(target => {
             if (target === owner || target.isDead) return;
             
