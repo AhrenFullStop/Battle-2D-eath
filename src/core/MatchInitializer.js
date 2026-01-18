@@ -124,6 +124,7 @@ export class MatchInitializer {
         const renderer = new Renderer(this.canvas, this.assetLoader);
 
         this.gameState.safeZoneSystem = safeZoneSystem;
+        this.gameState.cameraSystem = cameraSystem;
 
         // Create spawn manager (no AI system for multiplayer)
         const spawnManager = new SpawnManager(this.gameState, selectedMap.mapData?.obstacles || [], null);
