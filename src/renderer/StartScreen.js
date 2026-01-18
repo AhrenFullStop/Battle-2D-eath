@@ -218,452 +218,439 @@ export class StartScreen {
 
     ensureMultiplayerLobbyDom() {
         if (this.mpDom) return;
-
         const root = document.createElement('div');
         root.className = 'mp-lobby';
-        root.style.display = 'none';
+        document.body.appendChild(root);
 
+        // Wizard UI Structure
         root.innerHTML = `
-            <div class="mp-panel">
-                <div class="mp-row mp-title">
-                    Multiplayer Lobby
-                    <div class="mp-lobby-count" data-mp="lobbyCount">Players: 1/2</div>
+            <div class="mp-panel mp-wizard-panel">
+                <div class="mp-header">
+                    <div class="mp-title">Multiplayer Lobby</div>
+                    <button class="mp-close-btn" data-mp="close">×</button>
                 </div>
 
-                <div class="mp-row">
-                    <div class="mp-label">Status</div>
-                    <div class="mp-status" data-mp="status">Disconnected</div>
+                <!-- STATUS BAR -->
+                <div class="mp-status-bar">
+                    <span data-mp="statusText">Disconnected</span>
+                    <span class="mp-players" data-mp="playerCount">Players: 1/2</span>
                 </div>
 
-                <div class="mp-row mp-inline">
-                    <label class="mp-inline">
-                        <input type="checkbox" data-mp="useStun" />
-                        <span>Use public STUN (optional)</span>
-                    </label>
+                <!-- STEP 0: LANDING -->
+                <div class="mp-step" data-step="landing">
+                    <p class="mp-desc">Play peer-to-peer with a friend nearby.</p>
+                    <div class="mp-actions-vertical">
+                        <button class="mp-btn mp-primary mp-large" data-mp="btnHost">Host Game</button>
+                        <button class="mp-btn mp-large" data-mp="btnJoin">Join Game</button>
+                    </div>
                 </div>
 
-                <div class="mp-row mp-buttons">
-                    <button class="mp-btn" data-mp="host">Host</button>
-                    <button class="mp-btn" data-mp="join">Join</button>
-                    <button class="mp-btn" data-mp="disconnect" disabled>Disconnect</button>
-                </div>
-
-                <!-- QR Code Section (Host Only) -->
-                <div class="mp-row mp-qr-container" data-mp="qrContainer" style="display:none; text-align:center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                     <div data-mp="qrCode"></div>
-                     <div style="font-size: 12px; color: #aaa; margin-top: 5px;">Scan to Join</div>
-                     <div style="margin-top:5px;"><a href="#" data-mp="shareLink" target="_blank" style="color:#4af; font-size:12px;">Open Join Link</a></div>
-                </div>
-
-                <div class="mp-row mp-split">
-                    <div class="mp-col">
-                        <div class="mp-label">Offer / Join Code</div>
-                        <textarea class="mp-text" data-mp="offer" rows="5" readonly placeholder="Tap Host to generate an offer, or paste one here after tapping Join."></textarea>
-                        <div class="mp-row mp-buttons">
-                            <button class="mp-btn" data-mp="copyOffer" disabled>Copy</button>
+                <!-- STEP 1-HOST: WAITING -->
+                <div class="mp-step hidden" data-step="host_waiting">
+                    <div class="mp-section">
+                        <div class="mp-step-num">1</div>
+                        <div class="mp-step-content">
+                            <p>Share this with your friend:</p>
+                            <div class="mp-qr-wrapper" data-mp="hostQr"></div>
+                            <div class="mp-row-tight">
+                                <button class="mp-btn" data-mp="btnCopyLink">Copy Link</button>
+                                <button class="mp-btn" data-mp="btnCopyOffer">Copy Code</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="mp-col">
-                        <div class="mp-label">Answer</div>
-                        <textarea class="mp-text" data-mp="answer" rows="5" placeholder="Paste the answer here (Host), or copy it from here (Join)"></textarea>
-                        <div class="mp-row mp-buttons">
-                            <button class="mp-btn" data-mp="makeAnswer" disabled>Create Answer</button>
-                            <button class="mp-btn" data-mp="applyAnswer" disabled>Apply Answer</button>
-                            <button class="mp-btn" data-mp="copyAnswer" disabled>Copy</button>
+
+                    <div class="mp-divider"></div>
+
+                    <div class="mp-section">
+                        <div class="mp-step-num">2</div>
+                        <div class="mp-step-content">
+                            <p>Paste their Reply Code here:</p>
+                            <textarea class="mp-input-area" data-mp="hostAnswerInput" rows="2" placeholder="Paste Reply Code..."></textarea>
+                            <button class="mp-btn mp-primary" data-mp="btnHostConnect" disabled>Connect to Friend</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="mp-row mp-buttons" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-                    <button class="mp-btn mp-primary" data-mp="ready" disabled>Ready to Battle</button>
-                    <button class="mp-btn" data-mp="unready" disabled>Cancel</button>
+                <!-- STEP 1-JOIN: ENTRY -->
+                <div class="mp-step hidden" data-step="join_entry">
+                    <div class="mp-section">
+                         <div class="mp-step-content">
+                            <p>Paste the Host's Invite Link or Code:</p>
+                            <textarea class="mp-input-area" data-mp="joinOfferInput" rows="3" placeholder="Paste Link or Code..."></textarea>
+                            <button class="mp-btn mp-primary" data-mp="btnJoinGenerate">Generate Reply</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mp-row">
+                <!-- STEP 2-JOIN: RESPONSE -->
+                <div class="mp-step hidden" data-step="join_response">
+                    <div class="mp-section">
+                        <div class="mp-step-content">
+                            <p><strong>Reply Generated!</strong><br>Send this back to the Host:</p>
+                            <textarea class="mp-input-area" data-mp="joinAnswerDisplay" rows="3" readonly></textarea>
+                            <button class="mp-btn mp-primary" data-mp="btnJoinCopyAnswer">Copy Reply Code</button>
+                        </div>
+                    </div>
+                    <div class="mp-status-msg">Waiting for Host to connect...</div>
+                </div>
+
+                <!-- STEP: CONNECTED / LOBBY -->
+                <div class="mp-step hidden" data-step="lobby">
+                    <div class="mp-lobby-status">
+                        <div class="mp-connection-dot connected"></div>
+                        <span>Combined & Ready!</span>
+                    </div>
+
+                    <div class="mp-map-select hidden">
+                        Map: <span data-mp="mapName">Facey</span>
+                    </div>
+
+                    <div class="mp-actions-center">
+                         <button class="mp-btn mp-ready-btn" data-mp="btnToggleReady">Ready to Battle</button>
+                    </div>
                     <div class="mp-countdown" data-mp="countdown"></div>
                 </div>
+
             </div>
         `;
 
-        document.body.appendChild(root);
-
-        const q = (sel) => root.querySelector(sel);
-        const statusEl = q('[data-mp="status"]');
-        const offerEl = q('[data-mp="offer"]');
-        const answerEl = q('[data-mp="answer"]');
-        const countdownEl = q('[data-mp="countdown"]');
-        const lobbyCountEl = q('[data-mp="lobbyCount"]');
-        const qrContainerEl = q('[data-mp="qrContainer"]');
-        const qrCodeEl = q('[data-mp="qrCode"]');
-        const shareLinkEl = q('[data-mp="shareLink"]');
-
-        const btnHost = q('[data-mp="host"]');
-        const btnJoin = q('[data-mp="join"]');
-        const btnDisconnect = q('[data-mp="disconnect"]');
-        const btnCopyOffer = q('[data-mp="copyOffer"]');
-        const btnMakeAnswer = q('[data-mp="makeAnswer"]');
-        const btnApplyAnswer = q('[data-mp="applyAnswer"]');
-        const btnCopyAnswer = q('[data-mp="copyAnswer"]');
-        const btnReady = q('[data-mp="ready"]');
-        const btnUnready = q('[data-mp="unready"]');
-
-        const stunCheckbox = q('[data-mp="useStun"]');
-
-        const render = () => {
-            statusEl.textContent = this.mp.statusText;
-            offerEl.value = this.mp.offerCode || '';
-            const isConnected = this.mp.connection && this.mp.connection.isConnected();
-
-            // Visual Lobby Count
-            lobbyCountEl.textContent = isConnected ? "Players: 2/2" : "Players: 1/2";
-            lobbyCountEl.style.color = isConnected ? "#4ade80" : "#94a3b8";
-
-            // QR & Link Display (Host only, providing we have an offer but no peer yet)
-            if (this.mp.role === 'host' && this.mp.offerCode && !isConnected) {
-                qrContainerEl.style.display = 'block';
-                // Update QR only if offer changed significantly or first render
-                if (this.mp.joinLink) {
-                    shareLinkEl.href = this.mp.joinLink;
-                    shareLinkEl.textContent = "Open Join Link (Test)";
-
-                    // Render QR if empty
-                    if (!qrCodeEl.hasChildNodes()) {
-                        try {
-                            const qr = qrcode(0, 'L');
-                            qr.addData(this.mp.joinLink);
-                            qr.make();
-                            qrCodeEl.innerHTML = qr.createImgTag(3, 8); // 3px cells
-                        } catch (e) {
-                            qrCodeEl.textContent = "(QR Error)";
-                        }
-                    }
-                }
-            } else {
-                qrContainerEl.style.display = 'none';
-                qrCodeEl.innerHTML = ''; // Clear when hidden to force redraw next time
-            }
-
-            if (this.mp.role === 'client') {
-                // joiner pastes offer; answer becomes generated output
-                // Keep offer editable for joiner.
-                offerEl.readOnly = false;
-                // FIX: Check for connection existence, not just truthiness, but logical readyness 
-                // However, logic below: we need connection object + offer code to make answer.
-                btnMakeAnswer.disabled = !this.mp.offerCode || !this.mp.connection || !!this.mp.answerCode; 
-                btnApplyAnswer.disabled = true;
-                btnCopyAnswer.disabled = !this.mp.answerCode;
-                btnCopyOffer.disabled = true;
-            } else if (this.mp.role === 'host') {
-                offerEl.readOnly = true;
-                btnMakeAnswer.disabled = true;
-                btnApplyAnswer.disabled = !this.mp.answerCode || !this.mp.connection;
-                btnCopyOffer.disabled = !this.mp.offerCode;
-                btnCopyAnswer.disabled = false;
-            } else {
-                offerEl.readOnly = true;
-                btnMakeAnswer.disabled = true;
-                btnApplyAnswer.disabled = true;
-                btnCopyAnswer.disabled = true;
-                btnCopyOffer.disabled = true;
-            }
-
-            btnDisconnect.disabled = !this.mp.connection;
-            btnReady.disabled = !this.mp.connection || !this.mp.connection.isConnected() || this.mp.localReady;
-            btnUnready.disabled = !this.mp.connection || !this.mp.connection.isConnected() || !this.mp.localReady;
-
-            if (this.mp.countdown.active) {
-                countdownEl.textContent = `Match starting in ${this.mp.countdown.secondsLeft}…`;
-            } else {
-                countdownEl.textContent = '';
+        // Selectors
+        const q = (s) => root.querySelector(s);
+        const els = {
+            panels: root.querySelectorAll('.mp-step'),
+            statusText: q('[data-mp="statusText"]'),
+            playerCount: q('[data-mp="playerCount"]'),
+            hostQr: q('[data-mp="hostQr"]'),
+            hostAnswerInput: q('[data-mp="hostAnswerInput"]'),
+            joinOfferInput: q('[data-mp="joinOfferInput"]'),
+            joinAnswerDisplay: q('[data-mp="joinAnswerDisplay"]'),
+            mapName: q('[data-mp="mapName"]'),
+            countdown: q('[data-mp="countdown"]'),
+            btns: {
+                host: q('[data-mp="btnHost"]'),
+                join: q('[data-mp="btnJoin"]'),
+                copyLink: q('[data-mp="btnCopyLink"]'),
+                copyOffer: q('[data-mp="btnCopyOffer"]'),
+                hostConnect: q('[data-mp="btnHostConnect"]'),
+                joinGenerate: q('[data-mp="btnJoinGenerate"]'),
+                joinCopyAnswer: q('[data-mp="btnJoinCopyAnswer"]'),
+                toggleReady: q('[data-mp="btnToggleReady"]'),
+                close: q('[data-mp="close"]')
             }
         };
 
-        const setStatus = (text) => {
-            this.mp.statusText = text;
-            render();
+        // State Helpers
+        const setStep = (stepName) => {
+            els.panels.forEach(p => {
+                if (p.dataset.step === stepName) p.classList.remove('hidden');
+                else p.classList.add('hidden');
+            });
         };
 
+        const setStatus = (msg) => {
+            if (this.mp.statusText !== msg) {
+                this.mp.statusText = msg;
+                els.statusText.textContent = msg;
+            }
+        };
+
+        // Clean up helper
         const shutdown = () => {
             if (this.mp.connection) {
-                this.mp.connection.onMessage = null;
-                this.mp.connection.onStatus = null;
                 this.mp.connection.close();
+                this.mp.connection = null;
             }
             this.mp.role = null;
-            this.mp.connection = null;
             this.mp.offerCode = '';
             this.mp.answerCode = '';
-            this.mp.remoteReady = false;
+            this.mp.statusText = 'Disconnected';
             this.mp.localReady = false;
-            this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
-            this.mp.seed = null;
-            setStatus('Disconnected');
+            this.mp.remoteReady = false;
+
+            // Re-render to landing
+            this.hideMultiplayerLobbyDom();
         };
 
-        const send = (payload) => {
-            if (!this.mp.connection) return;
-            this.mp.connection.send(payload);
-        };
-
-        const startCountdownHost = (seconds) => {
-            if (!this.mp.connection || this.mp.role !== 'host') return;
-            this.mp.countdown.active = true;
-            this.mp.countdown.secondsLeft = seconds;
-            this.mp.countdown.endsAtMs = Date.now() + seconds * 1000;
-            send({ type: 'countdown_start', seconds, endsAtMs: this.mp.countdown.endsAtMs });
-            render();
-        };
-
-        const cancelCountdownHost = () => {
-            if (!this.mp.connection || this.mp.role !== 'host') return;
-            if (!this.mp.countdown.active) return;
-            this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
-            send({ type: 'countdown_cancel' });
-            render();
-        };
-
-        const tryStartCountdownHost = () => {
-            if (this.mp.role !== 'host') return;
-            if (!this.mp.localReady || !this.mp.remoteReady) return;
-            if (this.mp.countdown.active) return;
-            startCountdownHost(3);
-        };
-
-        const finalizeStartHost = () => {
-            if (this.mp.role !== 'host') return;
-            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
-
-            // Generate a deterministic seed (shared by both peers).
-            if (this.mp.seed == null) this.mp.seed = randomSeedUint32();
-
-            send({ type: 'start', seed: this.mp.seed, mapFile: this.mp.mapFile });
-
-            // Also start locally.
-            this.multiplayerStartRequested = true;
-            this.multiplayerStartSession = {
-                role: 'host',
-                seed: this.mp.seed,
-                mapFile: this.mp.mapFile,
-                connection: this.mp.connection
-            };
-        };
-
-        const handleLobbyMessage = (msg) => {
-            if (!msg || msg.v !== 1) return;
-            switch (msg.type) {
-                case 'ready': {
-                    this.mp.remoteReady = !!msg.ready;
-                    if (this.mp.role === 'host') {
-                        if (!this.mp.remoteReady || !this.mp.localReady) cancelCountdownHost();
-                        tryStartCountdownHost();
-                    }
-                    render();
-                    break;
-                }
-                case 'countdown_start': {
-                    // Client mirrors host’s countdown.
-                    if (this.mp.role !== 'client') break;
-                    const seconds = Number(msg.seconds) || 3;
-                    const endsAtMs = Number(msg.endsAtMs) || (Date.now() + seconds * 1000);
-                    this.mp.countdown = { active: true, secondsLeft: seconds, endsAtMs };
-                    render();
-                    break;
-                }
-                case 'countdown_cancel': {
-                    this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
-                    render();
-                    break;
-                }
-                case 'start': {
-                    // Client receives the authoritative start packet.
-                    if (this.mp.role !== 'client') break;
-                    const seed = msg.seed;
-                    const mapFile = msg.mapFile;
-                    if (!Number.isInteger(seed) || typeof mapFile !== 'string') break;
-                    this.mp.seed = seed;
-                    this.mp.mapFile = mapFile;
-
-                    this.multiplayerStartRequested = true;
-                    this.multiplayerStartSession = {
-                        role: 'client',
-                        seed,
-                        mapFile,
-                        connection: this.mp.connection
-                    };
-                    break;
-                }
-            }
-        };
-
+        // Core Functions
         const wireConnection = (conn) => {
             conn.onStatus = (s) => {
                 if (s === 'connected') {
                     setStatus('Connected');
-                } else if (s === 'connecting') {
-                    setStatus('Connecting…');
-                } else if (s === 'awaiting-host') {
-                    setStatus('Awaiting host…');
-                } else if (s === 'creating-offer') {
-                    setStatus('Creating offer…');
-                } else if (s === 'creating-answer') {
-                    setStatus('Creating answer…');
-                } else if (s === 'setting-offer') {
-                    setStatus('Setting offer…');
-                } else if (s === 'setting-answer') {
-                    setStatus('Setting answer…');
-                } else if (s === 'disconnected' || s === 'closed') {
-                    setStatus('Disconnected');
-                } else if (typeof s === 'string' && s.startsWith('pc:')) {
-                    // keep last state in the status line if we have nothing more user-friendly
-                    if (!conn.isConnected()) setStatus('Connecting…');
+                    els.playerCount.textContent = 'Players: 2/2';
+                    els.playerCount.style.color = '#4ade80'; // green
+                    setStep('lobby');
+                } else {
+                    setStatus(s); // e.g. 'connecting...'
+                    if (s === 'closed' || s === 'disconnected') {
+                        els.playerCount.textContent = 'Players: 1/2';
+                        els.playerCount.style.color = '';
+                        // If we were in lobby, maybe go back to landing?
+                        // For now keep state but warn user
+                    }
                 }
             };
-            conn.onMessage = handleLobbyMessage;
+
+            conn.onMessage = (msg) => {
+                if (!msg || msg.v !== 1) return;
+                switch (msg.type) {
+                    case 'ready':
+                        this.mp.remoteReady = msg.ready;
+                        render();
+                        // If host, check for start
+                        if (this.mp.role === 'host' && this.mp.localReady && this.mp.remoteReady) {
+                            tryStartCountdownHost();
+                        } else if (this.mp.role === 'host') { // cancel if someone unreadied
+                            cancelCountdownHost();
+                        }
+                        break;
+                    case 'countdown_start':
+                        if (this.mp.role === 'client') {
+                            const seconds = Number(msg.seconds) || 3;
+                            const endsAtMs = Number(msg.endsAtMs) || (Date.now() + seconds * 1000);
+                            this.mp.countdown = { active: true, secondsLeft: seconds, endsAtMs };
+                            requestAnimationFrame(runCountdown);
+                        }
+                        break;
+                    case 'countdown_cancel':
+                        this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+                        render();
+                        break;
+                    case 'start':
+                        // CLIENT START
+                        if (this.mp.role === 'client') {
+                            this.multiplayerStartRequested = true;
+                            this.multiplayerStartSession = {
+                                role: 'client',
+                                seed: msg.seed,
+                                mapFile: msg.mapFile,
+                                connection: this.mp.connection
+                            };
+                        }
+                        break;
+                }
+            };
         };
 
-        // UI events
-        stunCheckbox.addEventListener('change', () => {
-            this.mp.useStun = !!stunCheckbox.checked;
-        });
+        const tryStartCountdownHost = () => {
+            if (this.mp.countdown.active) return;
+            const seconds = 3;
+            const endsAtMs = Date.now() + (seconds * 1000);
+            this.mp.countdown = { active: true, secondsLeft: seconds, endsAtMs };
 
-        offerEl.addEventListener('input', () => {
-            this.mp.offerCode = offerEl.value;
-            render();
-        });
-        answerEl.addEventListener('input', () => {
-            this.mp.answerCode = answerEl.value;
-            render();
-        });
+            // Send to client
+            if (this.mp.connection) {
+                this.mp.connection.send({
+                    type: 'countdown_start',
+                    seconds,
+                    endsAtMs
+                });
+            }
+            requestAnimationFrame(runCountdown);
+        };
 
-        btnHost.addEventListener('click', async () => {
-            shutdown();
+        const cancelCountdownHost = () => {
+            this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
+            if (this.mp.connection) this.mp.connection.send({ type: 'countdown_cancel' });
+            render();
+        };
+
+        const finalizeStartHost = () => {
+            // HOST START - CRASH FIX HERE
+            // Ensure mapFile is present
+            const mapFile = this.mp.mapFile || 'facey.json';
+            const seed = this.mp.seed || (Math.floor(Math.random() * 4294967296));
+
+            // Send start to client
+            if (this.mp.connection) {
+                this.mp.connection.send({
+                    type: 'start',
+                    seed: seed,
+                    mapFile: mapFile
+                });
+            }
+
+            // Trigger local start
+            this.multiplayerStartRequested = true;
+            this.multiplayerStartSession = {
+                role: 'host',
+                 seed: seed,
+                 mapFile: mapFile,
+                 connection: this.mp.connection
+             };
+        };
+
+        const runCountdown = () => {
+            if (!this.mp.countdown.active) {
+                els.countdown.textContent = '';
+                return;
+            }
+            const msLeft = this.mp.countdown.endsAtMs - Date.now();
+            const secLeft = Math.ceil(msLeft / 1000);
+
+            if (secLeft <= 0) {
+                this.mp.countdown.active = false;
+                els.countdown.textContent = 'GO!';
+                if (this.mp.role === 'host') finalizeStartHost();
+            } else {
+                if (secLeft !== this.mp.countdown.secondsLeft) {
+                    this.mp.countdown.secondsLeft = secLeft;
+                    els.countdown.textContent = secLeft;
+                }
+                requestAnimationFrame(runCountdown);
+            }
+        };
+
+        // Render function (updates UI state based on `this.mp`)
+        const render = () => {
+            // Host Connect Button Valid?
+            els.btns.hostConnect.disabled = !els.hostAnswerInput.value.trim();
+
+            // Ready Button Text
+            if (this.mp.localReady) {
+                els.btns.toggleReady.textContent = "Waiting for other...";
+                els.btns.toggleReady.classList.add('active');
+            } else {
+                els.btns.toggleReady.textContent = "Ready to Battle";
+                els.btns.toggleReady.classList.remove('active');
+            }
+
+            // Setup QR if needed
+            if (this.mp.role === 'host' && this.mp.joinLink && !els.hostQr.hasChildNodes()) {
+                try {
+                    const qr = qrcode(0, 'M');
+                    qr.addData(this.mp.joinLink);
+                    qr.make();
+                    els.hostQr.innerHTML = qr.createImgTag(3, 4);
+                } catch (e) { }
+            }
+        };
+
+
+        // --- Event Listeners ---
+
+        els.btns.close.addEventListener('click', shutdown);
+
+        els.btns.host.addEventListener('click', async () => {
             this.mp.role = 'host';
+            // Setup connection
             const iceServers = this.mp.useStun ? getOptionalPublicStunIceServers() : [];
             const conn = new WebRTCManualConnection({ role: 'host', iceServers });
             this.mp.connection = conn;
             wireConnection(conn);
+
+            // Create Offer
+            setStatus('Creating Offer...');
             try {
                 this.mp.offerCode = await conn.createOfferCode();
-
-                // Generate Join Link
-                const base64Offer = btoa(this.mp.offerCode);
-                const baseUrl = window.location.href.split('#')[0];
-                this.mp.joinLink = `${baseUrl}#join=${base64Offer}`;
-
-                setStatus('Offer ready. Share Link or QR code!');
-            } catch (e) {
-                console.error(e);
-                setStatus('Failed to create offer');
-            }
-            render();
+                 const b64 = btoa(this.mp.offerCode);
+                 this.mp.joinLink = window.location.href.split('#')[0] + '#join=' + b64;
+                 setStatus('Waiting for reply...');
+                 setStep('host_waiting');
+                 render();
+             } catch (e) {
+                 console.error(e);
+                 setStatus('Error creating offer');
+             }
         });
 
-        btnJoin.addEventListener('click', async () => {
-            shutdown();
+        els.btns.join.addEventListener('click', () => {
             this.mp.role = 'client';
+            setStep('join_entry');
+        });
+
+        // HOST: Copy Link
+        els.btns.copyLink.addEventListener('click', () => {
+            if (this.mp.joinLink) navigator.clipboard.writeText(this.mp.joinLink);
+        });
+
+        // HOST: Copy Code (Fallback)
+        els.btns.copyOffer.addEventListener('click', () => {
+            if (this.mp.offerCode) navigator.clipboard.writeText(this.mp.offerCode);
+        });
+
+        // HOST: Connect (Paste Reply)
+        els.btns.hostConnect.addEventListener('click', async () => {
+            const answer = els.hostAnswerInput.value.trim();
+            if (!answer) return;
+            try {
+                 setStatus('Connecting...');
+                 await this.mp.connection.acceptAnswerCode(answer);
+             } catch (e) {
+                 setStatus('Invalid Reply Code');
+                 console.error(e);
+             }
+        });
+
+        els.hostAnswerInput.addEventListener('input', render);
+
+        // JOIN: Generate Reply (from Link or Paste)
+        els.btns.joinGenerate.addEventListener('click', async () => {
+            const offer = els.joinOfferInput.value.trim();
+            // Handle pure base64 (link format) vs JSON
+            let cleanOffer = offer;
+
+            // Try to be smart if they pasted a full URL
+            if (offer.includes('#join=')) {
+                try {
+                     const b64 = offer.split('#join=')[1];
+                     cleanOffer = atob(b64);
+                 } catch (e) { }
+             }
+
+            if (!cleanOffer) return;
+
+            // Start Client Connection
             const iceServers = this.mp.useStun ? getOptionalPublicStunIceServers() : [];
             const conn = new WebRTCManualConnection({ role: 'client', iceServers });
             this.mp.connection = conn;
             wireConnection(conn);
-            setStatus('Paste offer, then Create Answer');
-            render();
-        });
 
-        btnDisconnect.addEventListener('click', () => {
-            shutdown();
-        });
-
-        btnCopyOffer.addEventListener('click', async () => {
-            if (!this.mp.offerCode) return;
             try {
-                await navigator.clipboard.writeText(this.mp.offerCode);
-            } catch {
-                // ignore
-            }
+                 this.mp.answerCode = await conn.acceptOfferCodeAndCreateAnswer(cleanOffer);
+                 els.joinAnswerDisplay.value = this.mp.answerCode;
+                 setStep('join_response');
+                 setStatus('Reply generated. Send back to Host.');
+             } catch (e) {
+                 console.error(e);
+                 setStatus('Invalid Invite Code');
+             }
         });
 
-        btnMakeAnswer.addEventListener('click', async () => {
-            if (!this.mp.connection || this.mp.role !== 'client') return;
-            try {
-                this.mp.answerCode = await this.mp.connection.acceptOfferCodeAndCreateAnswer(this.mp.offerCode);
-                // Populate the output for copy.
-                answerEl.value = this.mp.answerCode;
-                setStatus('Answer ready. Send it back to host.');
-            } catch (e) {
-                console.error(e);
-                setStatus('Failed to create answer');
-            }
+        // JOIN: Copy Reply
+        els.btns.joinCopyAnswer.addEventListener('click', () => {
+            if (els.joinAnswerDisplay.value) navigator.clipboard.writeText(els.joinAnswerDisplay.value);
+        });
+
+        // READY TOGGLE
+        els.btns.toggleReady.addEventListener('click', () => {
+            if (this.mp.localReady) {
+                // unready
+                this.mp.localReady = false;
+                 if (this.mp.connection) this.mp.connection.send({ type: 'ready', ready: false });
+                 if (this.mp.role === 'host') cancelCountdownHost();
+             } else {
+                 // ready
+                 this.mp.localReady = true;
+                 if (this.mp.connection) this.mp.connection.send({ type: 'ready', ready: true });
+                 // Host checks start in onMessage ('ready')
+             }
             render();
         });
 
-        btnApplyAnswer.addEventListener('click', async () => {
-            if (!this.mp.connection || this.mp.role !== 'host') return;
-            try {
-                await this.mp.connection.acceptAnswerCode(this.mp.answerCode);
-                setStatus('Connecting…');
-            } catch (e) {
-                console.error(e);
-                setStatus('Failed to apply answer');
-            }
-            render();
-        });
 
-        btnCopyAnswer.addEventListener('click', async () => {
-            if (!this.mp.answerCode) return;
-            try {
-                await navigator.clipboard.writeText(this.mp.answerCode);
-            } catch {
-                // ignore
-            }
-        });
-
-        btnReady.addEventListener('click', () => {
-            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
-            this.mp.localReady = true;
-            send({ type: 'ready', ready: true });
-            if (this.mp.role === 'host') tryStartCountdownHost();
-            render();
-        });
-
-        btnUnready.addEventListener('click', () => {
-            if (!this.mp.connection || !this.mp.connection.isConnected()) return;
-            this.mp.localReady = false;
-            send({ type: 'ready', ready: false });
-            if (this.mp.role === 'host') cancelCountdownHost();
-            render();
-        });
-
-        // Countdown updater (UI-only)
-        const countdownTimer = () => {
-            if (!this.mpDom) return;
-            if (!this.mp.countdown.active) {
-                render();
-                requestAnimationFrame(countdownTimer);
-                return;
-            }
-
-            const msLeft = this.mp.countdown.endsAtMs - Date.now();
-            const secLeft = Math.max(0, Math.ceil(msLeft / 1000));
-            this.mp.countdown.secondsLeft = secLeft;
-            render();
-
-            if (secLeft <= 0) {
-                this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
-                render();
-                if (this.mp.role === 'host') {
-                    finalizeStartHost();
-                }
-            }
-
-            requestAnimationFrame(countdownTimer);
-        };
-
-        requestAnimationFrame(countdownTimer);
+        // Handle auto-join via link state
+        if (this.mp && this.mp.role === 'client' && this.mp.offerCode) {
+            // Pre-fill
+            els.joinOfferInput.value = this.mp.offerCode;
+            setStep('join_entry'); // Start at entry
+            // Auto-click generate?
+            els.btns.joinGenerate.click();
+        }
 
         this.mpDom = {
             root,
-            shutdown,
             render,
+            shutdown,
             updateLayout: () => {
                 const rect = this.canvas.getBoundingClientRect();
                 root.style.left = `${rect.left}px`;
@@ -673,7 +660,7 @@ export class StartScreen {
             }
         };
 
-        render();
+        render(); // First render
     }
 
     showMultiplayerLobbyDom() {
