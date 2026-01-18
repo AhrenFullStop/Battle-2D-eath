@@ -142,6 +142,9 @@ export class MultiplayerMatchController {
         // Setup event listeners for stats tracking (after mpPlayers is set)
         this.setupEventListeners(systems.eventBus);
 
+        // Start the lockstep session to begin syncing inputs
+        this.mpLockstep.start();
+
         console.log('Multiplayer match started!');
         return { systems, spawnManager, playerCharacter };
     }
