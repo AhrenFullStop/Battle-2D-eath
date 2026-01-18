@@ -33,6 +33,7 @@ export class SpawnManager {
         this.mapObstacles = mapObstacles;
         this.aiSystem = aiSystem;
         this.consumables = [];
+        this.localWeapons = []; // Fallback for multiplayer/no-AI
     }
 
     /**
@@ -43,7 +44,26 @@ export class SpawnManager {
      * @returns {Weapon} The spawned weapon entity
      */
     spawnWeapon(position, weaponType = 'blaster', tier = 1) {
-        return this.aiSystem.spawnWeapon(position, weaponType, tier);
+        if (this.aiSystem) {
+            return this.aiSystem.spawnWeapon(position, weaponType, tier);
+        } else {
+            // Multiplayer/No-AI fallback
+            const weaponConfig = createWeapon(weaponType, tier);
+            const weaponPickup = new WeaponPickup(position, weaponConfig);
+            this.localWeapons.push(weaponPickup);
+            return weaponPickup;
+        }
+    }
+
+    /**
+     * Get available weapons from AI system or local storage
+     * @returns {Array<WeaponPickup>}
+     */
+    getAvailableWeapons() {
+        if (this.aiSystem) {
+            return this.aiSystem.getAvailableWeapons();
+        }
+        return this.localWeapons.filter(w => w.active);
     }
 
     /**

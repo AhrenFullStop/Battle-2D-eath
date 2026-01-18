@@ -361,8 +361,9 @@ class Game {
                         interpolation,
                         this.multiplayerController.orchestrator.systems.combatSystem,
                         this.multiplayerController.orchestrator.systems.aiSystem,
-                        [], // No consumables in multiplayer
-                        this.multiplayerController.orchestrator.systems.abilitySystem
+                        this.multiplayerController.orchestrator.spawnManager ? this.multiplayerController.orchestrator.spawnManager.consumables : [],
+                        this.multiplayerController.orchestrator.systems.abilitySystem,
+                        this.multiplayerController.orchestrator.spawnManager
                     );
                 }
             } else if (this.gameOrchestrator && this.gameOrchestrator.systems.renderer) {
@@ -373,8 +374,9 @@ class Game {
                     interpolation,
                     this.gameOrchestrator.systems.combatSystem,
                     this.gameOrchestrator.systems.aiSystem,
-                    this.gameOrchestrator.spawnManager.consumables,
-                    this.gameOrchestrator.systems.abilitySystem
+                    this.gameState.consumables || (this.gameOrchestrator.spawnManager ? this.gameOrchestrator.spawnManager.consumables : []),
+                    this.gameOrchestrator.systems.abilitySystem,
+                    this.gameOrchestrator.spawnManager
                 );
             }
         }

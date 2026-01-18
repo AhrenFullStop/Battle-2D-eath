@@ -31,7 +31,7 @@ export class Renderer {
      * @param {Array} consumables - Consumable entities
      * @param {AbilitySystem} abilitySystem - Ability system for previews
      */
-    render(gameState, inputSystem, gameLoop, interpolation, combatSystem, aiSystem, consumables, abilitySystem) {
+    render(gameState, inputSystem, gameLoop, interpolation, combatSystem, aiSystem, consumables, abilitySystem, spawnManager) {
         // CRITICAL: Clear the entire canvas before rendering
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -48,8 +48,14 @@ export class Renderer {
         this.mapRenderer.render(camera, gameState, consumables);
         
         // Layer 2: Weapon pickups on ground
-        if (aiSystem) {
-            const pickups = aiSystem.getAvailableWeapons();
+        let pickups = [];
+        if (spawnManager) {
+            pickups = spawnManager.getAvailableWeapons();
+        } else if (aiSystem) {
+            pickups = aiSystem.getAvailableWeapons();
+        }
+
+        if (pickups.length > 0) {
             pickups.forEach(pickup => {
                 if (pickup.active) {
                     pickup.update(0); // Update animations

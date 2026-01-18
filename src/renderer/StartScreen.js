@@ -840,7 +840,7 @@ export class StartScreen {
         ctx.textBaseline = 'middle';
         ctx.fillText('Enable Audio', centerX - 20, rowY);
 
-        // Radio Box
+        // Checkbox (Square)
         const boxSize = 24;
         const boxX = centerX + 10;
         const boxY = rowY - boxSize / 2;
@@ -848,14 +848,13 @@ export class StartScreen {
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(boxX + boxSize / 2, boxY + boxSize / 2, 12, 0, Math.PI * 2);
+        // ctx.roundRect(boxX, boxY, boxSize, boxSize, 4); // Use simple rect for broader compatibility if needed, or roundRect with small radius
+        ctx.rect(boxX, boxY, boxSize, boxSize);
         ctx.stroke();
 
         if (isEnabled) {
             ctx.fillStyle = '#4ade80';
-            ctx.beginPath();
-            ctx.arc(boxX + boxSize / 2, boxY + boxSize / 2, 7, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(boxX + 4, boxY + 4, boxSize - 8, boxSize - 8);
         }
 
         // Close Button
@@ -1278,11 +1277,6 @@ export class StartScreen {
         const touch = event.touches[0];
         const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
 
-    if (this.showSettings) {
-        this.handleSettingsTouch(coords.x, coords.y);
-        return;
-    }
-
         if (this.menuState !== 'solo') {
             this.isDragging = false;
             this.isDraggingMaps = false;
@@ -1311,6 +1305,11 @@ export class StartScreen {
         
         const touch = event.changedTouches[0];
         const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
+
+        if (this.showSettings) {
+            this.handleSettingsTouch(coords.x, coords.y);
+            return null;
+        }
 
         // Navigation states (home / multiplayer)
         if (this.menuState === 'home') {
@@ -1380,11 +1379,6 @@ export class StartScreen {
                 this.hideMultiplayerLobbyDom();
                 this.menuState = 'home';
             }
-            return null;
-        }
-        
-        if (this.showSettings) {
-            this.handleSettingsTouch(coords.x, coords.y);
             return null;
         }
 
