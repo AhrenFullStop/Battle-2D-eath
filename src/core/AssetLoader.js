@@ -1,10 +1,11 @@
-// Asset loader for images and future audio files
+// Asset loader for images and audio files
 
 import { resolveAssetUrl, warnMissingAsset } from '../utils/assetUrl.js';
 
 export class AssetLoader {
     constructor() {
         this.images = new Map();
+        this.audioBuffers = new Map(); // Store audio buffers
         this.loadedCount = 0;
         this.totalCount = 0;
         this.isLoading = false;
@@ -42,6 +43,39 @@ export class AssetLoader {
         });
     }
 
+    // Load an audio asset
+    loadAudio(key, path, audioManager, silent = true) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const url = resolveAssetUrl(path);
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+
+                // If we have an audioManager, decode immediately
+                if (audioManager) {
+                    await audioManager.load(key, arrayBuffer);
+                }
+
+                this.audioBuffers.set(key, arrayBuffer); // Store raw buffer too just in case
+                this.loadedCount++;
+                resolve(true);
+            } catch (error) {
+                warnMissingAsset('audio', path, error.message);
+                if (silent) {
+                    this.loadedCount++;
+                    resolve(false);
+                } else {
+                    reject(error);
+                }
+            }
+        });
+    }
+
     // Load multiple images
     async loadImages(imageList) {
         this.isLoading = true;
@@ -63,11 +97,11 @@ export class AssetLoader {
         }
     }
 
-    // Load all game PNG assets (characters, weapons, consumables, UI)
-    async loadGameAssets() {
+    // Load all game assets (images + audio)
+    async loadGameAssets(audioManager = null) {
         this.isLoading = true;
         
-        const assetList = [
+        const imageList = [
             // UI/Utility assets
             { key: 'intro_logo', path: 'assets/utils/intro_logo.png', category: 'ui', type: 'logo' },
             
@@ -90,11 +124,20 @@ export class AssetLoader {
             { key: 'consumable_shieldPotion', path: 'assets/consumables/shield.png', category: 'consumable', type: 'shieldPotion' }
         ];
 
-        this.totalCount = assetList.length;
+        const audioList = [
+            { key: 'weapon_blaster', path: 'assets/audio/blaster.mp3' },
+            { key: 'weapon_spear', path: 'assets/audio/spear.mp3' },
+            { key: 'weapon_bomb', path: 'assets/audio/bomb.mp3' },
+            { key: 'weapon_gun', path: 'assets/audio/gun.mp3' },
+            { key: 'impact_hit', path: 'assets/audio/hit.mp3' },
+            { key: 'impact_kill', path: 'assets/audio/kill.mp3' }
+        ];
+
+        this.totalCount = imageList.length + audioList.length;
         this.loadedCount = 0;
 
-        // Load all assets with silent failures (optional assets)
-        const promises = assetList.map(async ({ key, path, category, type }) => {
+        // Image promises
+        const imagePromises = imageList.map(async ({ key, path, category, type }) => {
             const img = await this.loadImage(key, path, true);
             
             if (img) {
@@ -109,18 +152,22 @@ export class AssetLoader {
                     this.consumableImages.set(type, img);
                 }
             }
-            
             return img;
         });
 
+        // Audio promises
+        const audioPromises = audioList.map(({ key, path }) =>
+            this.loadAudio(key, path, audioManager, true) // Silent fail if files don't exist
+        );
+
         try {
-            const results = await Promise.all(promises);
-            const successCount = results.filter(img => img !== null).length;
+            const results = await Promise.all([...imagePromises, ...audioPromises]);
+            const successCount = results.filter(r => r !== null && r !== false).length;
             
             if (successCount > 0) {
-                console.log(`Loaded ${successCount} of ${assetList.length} game assets`);
+                console.log(`Loaded game assets: ${successCount}/${this.totalCount}`);
             } else {
-                console.log('No PNG assets found - using fallback geometric rendering');
+                console.log('No assets found - using fallbacks');
             }
             
             this.isLoading = false;
@@ -193,6 +240,7 @@ export class AssetLoader {
     // Clear all loaded assets
     clear() {
         this.images.clear();
+        this.audioBuffers.clear();
         this.characterImages.clear();
         this.characterMenuPreviewImages.clear();
         this.weaponImages.clear();

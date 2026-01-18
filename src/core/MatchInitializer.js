@@ -33,6 +33,8 @@ import { CameraSystem } from '../systems/CameraSystem.js';
 import { AbilitySystem } from '../systems/AbilitySystem.js';
 import { Renderer } from '../renderer/Renderer.js';
 import { SpawnManager } from './SpawnManager.js';
+import { AudioSystem } from '../systems/AudioSystem.js';
+import { settingsManager } from './SettingsManager.js';
 import { CHARACTERS } from '../config/characters.js';
 import { createWeapon } from '../config/weapons.js';
 import { Weapon } from '../entities/Weapon.js';
@@ -56,11 +58,17 @@ export class MatchInitializer {
      * @param {Object} profile - Player profile data
      * @returns {Promise<{systems: Object, spawnManager: SpawnManager, playerCharacter: Player}>}
      */
-    async initializeSoloMatch(playerCharacterType, selectedMap, profile) {
+    async initializeSoloMatch(playerCharacterType, selectedMap, profile, audioManager) {
         console.log('Initializing solo match...');
 
         // Initialize core systems
         const eventBus = new EventBus();
+
+        // Audio System
+        const audioSystem = new AudioSystem(eventBus, audioManager);
+        audioSystem.audioManager.setVolume(settingsManager.get('volume'));
+
+
 
         // Initialize systems
         const inputSystem = new InputSystem(this.canvas, eventBus, this.assetLoader);
@@ -107,11 +115,17 @@ export class MatchInitializer {
      * @param {Object} profile - Player profile data
      * @returns {Promise<{systems: Object, spawnManager: SpawnManager, playerCharacter: Player}>}
      */
-    async initializeMultiplayerMatch(session, playerCharacterType, selectedMap, profile) {
+    async initializeMultiplayerMatch(session, playerCharacterType, selectedMap, profile, audioManager) {
         console.log('Initializing multiplayer match...');
 
         // Initialize core systems
         const eventBus = new EventBus();
+
+        // Audio System
+        const audioSystem = new AudioSystem(eventBus, audioManager);
+        audioSystem.audioManager.setVolume(settingsManager.get('volume'));
+
+
 
         // Systems (no AI / no loot)
         const inputSystem = new InputSystem(this.canvas, eventBus, this.assetLoader);

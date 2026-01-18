@@ -108,7 +108,9 @@ export class StartScreen {
             solo: { x: this.canvas.width / 2, y: this.canvas.height * 0.46, width: 260 * scale, height: 54 * scale, text: 'SOLO' },
             multiplayer: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 74 * scale, width: 260 * scale, height: 54 * scale, text: 'MULTIPLAYER' },
             upgrades: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'UPGRADES' },
-            editor: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 222 * scale, width: 260 * scale, height: 54 * scale, text: 'MAP EDITOR' }
+            upgrades: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'UPGRADES' },
+            settings: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 222 * scale, width: 260 * scale, height: 54 * scale, text: 'SETTINGS' },
+            editor: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 296 * scale, width: 260 * scale, height: 54 * scale, text: 'MAP EDITOR' }
         };
 
         // Back button (used on Solo + Multiplayer)
@@ -156,6 +158,12 @@ export class StartScreen {
 
         // Meta profile (shared via localStorage)
         this.profile = loadProfile();
+
+        // Settings State
+        this.showSettings = false;
+        import('../core/SettingsManager.js').then(m => {
+            this.settingsManager = m.settingsManager;
+        });
 
         // Render-time computed hit targets (Upgrades screen)
         this.upgradesBuyButtons = [];
@@ -794,10 +802,97 @@ export class StartScreen {
         }
     }
 
-    async loadBuildVersion() {
-        try {
-            const url = new URL('build-info.json', document.baseURI);
-            // Cache-bust so GH Pages/browser caches can’t pin an old version string.
+    drawSettingsOverlay(ctx) {
+        // Dim background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Panel
+        const width = Math.min(400, this.canvas.width * 0.85);
+        const height = 300;
+        const x = (this.canvas.width - width) / 2;
+        const y = (this.canvas.height - height) / 2;
+
+        ctx.fillStyle = '#2a2a2a';
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, 15);
+        ctx.fill();
+        ctx.stroke();
+
+        // Title
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SETTINGS', this.canvas.width / 2, y + 50);
+
+        // Volume Toggle
+        const vol = this.settingsManager ? this.settingsManager.get('volume') : 0.5;
+        const isMuted = vol === 0;
+
+        const btnY = y + 120;
+        ctx.fillStyle = isMuted ? '#ef4444' : '#22c55e';
+        ctx.beginPath();
+        ctx.roundRect((this.canvas.width - 200) / 2, btnY, 200, 50, 10);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText(isMuted ? 'UNMUTE SOUND' : 'MUTE SOUND', this.canvas.width / 2, btnY + 32);
+
+        // Close Button
+        const closeY = y + 220;
+        ctx.fillStyle = '#666';
+        ctx.beginPath();
+        ctx.roundRect((this.canvas.width - 120) / 2, closeY, 120, 40, 8);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Arial';
+        ctx.fillText('CLOSE', this.canvas.width / 2, closeY + 26);
+    }
+
+    handleSettingsTouch(x, y) {
+        const width = Math.min(400, this.canvas.width * 0.85);
+        const height = 300;
+        const panelY = (this.canvas.height - height) / 2;
+
+        // Volume Toggle Bounds
+        const btnY = panelY + 120;
+        const btnX = (this.canvas.width - 200) / 2;
+
+        if (x >= btnX && x <= btnX + 200 && y >= btnY && y <= btnY + 50) {
+            if (this.settingsManager) {
+                const currentVol = this.settingsManager.get('volume');
+                const newVol = currentVol === 0 ? 0.5 : 0;
+                this.settingsManager.set('volume', newVol);
+
+                // Also update global audio manager if accessible (dirty hack via window.game)
+                if (window.game && window.game.audioManager) {
+                    window.game.audioManager.setVolume(newVol);
+                    if (newVol > 0) window.game.audioManager.playSynthesized('blaster'); // Test sound
+                }
+            }
+            return;
+        }
+
+        // Close Button
+        const closeY = panelY + 220;
+        const closeX = (this.canvas.width - 120) / 2;
+
+        if (x >= closeX && x <= closeX + 120 && y >= closeY && y <= closeY + 40) {
+            this.showSettings = false;
+            return;
+        }
+
+        // Click outside panel to close
+        const panelX = (this.canvas.width - width) / 2;
+        if (x < panelX || x > panelX + width || y < panelY || y > panelY + height) {
+            this.showSettings = false;
+        }
+    }
+
             url.searchParams.set('t', String(Date.now()));
 
             const res = await fetch(url.toString(), { cache: 'no-store' });

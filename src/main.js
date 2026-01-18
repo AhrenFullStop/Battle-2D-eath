@@ -24,6 +24,8 @@
 import { GameLoop } from './core/GameLoop.js';
 import { GameState } from './core/GameState.js';
 import { AssetLoader } from './core/AssetLoader.js';
+import { AudioManager } from './core/AudioManager.js';
+import { settingsManager } from './core/SettingsManager.js';
 import { StartScreen } from './renderer/StartScreen.js';
 import { MatchInitializer } from './core/MatchInitializer.js';
 import { GameOrchestrator } from './core/GameOrchestrator.js';
@@ -56,6 +58,10 @@ class Game {
 
         // Initialize AssetLoader early for start screen
         this.assetLoader = new AssetLoader();
+
+        // Audio Manager
+        this.audioManager = new AudioManager();
+        this.audioManager.setVolume(settingsManager.get('volume'));
 
         // Start screen with asset loader
         this.startScreen = new StartScreen(this.canvas, this.ctx, this.assetLoader);
@@ -135,13 +141,14 @@ class Game {
         // Ensure assets are loaded
         if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
             console.log('Loading game assets...');
-            await this.assetLoader.loadGameAssets();
+            // Load assets including audio
+            await this.assetLoader.loadGameAssets(this.audioManager);
             console.log('Game assets loaded');
         }
 
         // Initialize match using MatchInitializer
         this.matchInitializer = new MatchInitializer(this.canvas, this.gameState, this.assetLoader);
-        const { systems, spawnManager, playerCharacter } = await this.matchInitializer.initializeSoloMatch(playerCharacterType, selectedMap, this.profile);
+        const { systems, spawnManager, playerCharacter } = await this.matchInitializer.initializeSoloMatch(playerCharacterType, selectedMap, this.profile, this.audioManager);
 
         // Create orchestrator
         this.gameOrchestrator = new GameOrchestrator(this.gameState, systems, systems.renderer, spawnManager, playerCharacter, this.profile);
@@ -189,7 +196,7 @@ class Game {
         // Ensure assets are loaded
         if (!this.assetLoader.isLoading && this.assetLoader.totalCount === 0) {
             console.log('Loading game assets for MP...');
-            await this.assetLoader.loadGameAssets();
+            await this.assetLoader.loadGameAssets(this.audioManager);
         }
 
         // Initialize multiplayer match using MultiplayerMatchController
@@ -198,7 +205,7 @@ class Game {
 
         console.log('Calling multiplayerController.startMatch...');
         try {
-            await this.multiplayerController.startMatch(session, playerCharacterType, { mapData: selectedMap }, isHost);
+            await this.multiplayerController.startMatch(session, playerCharacterType, { mapData: selectedMap }, isHost, this.audioManager);
         } catch (e) {
             console.error('❌ CRASH in multiplayerController.startMatch:', e);
             throw e;
@@ -324,6 +331,10 @@ class Game {
             // Check if start was requested
             if (this.startScreen.checkStartRequested()) {
                 console.log('Start button pressed, starting game...');
+
+                // Initialize/Resume Audio Context on user interaction
+                this.audioManager.init();
+
                 this.selectedCharacter = this.startScreen.getSelectedCharacter();
                 this.selectedMap = this.startScreen.getSelectedMap();
                 // Stop the start screen loop
