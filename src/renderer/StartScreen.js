@@ -845,13 +845,10 @@ export class StartScreen {
         const boxX = centerX + 10;
         const boxY = rowY - boxSize / 2;
 
-        ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        // ctx.roundRect(boxX, boxY, boxSize, boxSize, 4); // Use simple rect for broader compatibility if needed, or roundRect with small radius
-        ctx.rect(boxX, boxY, boxSize, boxSize);
-        ctx.stroke();
-
+        // Checkbox (Square) - Using strokeRect for absolute certainty
+        ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+        
         if (isEnabled) {
             ctx.fillStyle = '#4ade80';
             ctx.fillRect(boxX + 4, boxY + 4, boxSize - 8, boxSize - 8);
@@ -898,14 +895,18 @@ export class StartScreen {
         const closeY = panelY + 220;
         const closeX = (this.canvas.width - 120) / 2;
 
-        if (x >= closeX && x <= closeX + 120 && y >= closeY && y <= closeY + 40) {
-            this.showSettings = false;
-            return true;
-        }
-
         // Click outside panel to close
         if (x < panelX || x > panelX + width || y < panelY || y > panelY + height) {
-            this.showSettings = false;
+            this.menuState = 'home';
+            return true;
+        }
+        
+        // Close Button
+        // This is a duplicate check, but harmless. The above 'click outside' handles it.
+        // const closeY = panelY + 220;
+        // const closeX = (this.canvas.width - 120) / 2;
+        if (x >= closeX && x <= closeX + 120 && y >= closeY && y <= closeY + 40) {
+            this.menuState = 'home';
             return true;
         }
 
@@ -1306,12 +1307,12 @@ export class StartScreen {
         const touch = event.changedTouches[0];
         const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
 
-        if (this.showSettings) {
+        // Navigation states (home / multiplayer / settings)
+        if (this.menuState === 'settings') {
             this.handleSettingsTouch(coords.x, coords.y);
             return null;
         }
 
-        // Navigation states (home / multiplayer)
         if (this.menuState === 'home') {
             if (this.profileHudRect) {
                 const r = this.profileHudRect;
@@ -1335,7 +1336,7 @@ export class StartScreen {
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.settings)) {
-                this.showSettings = true;
+                this.menuState = 'settings';
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
@@ -1481,7 +1482,7 @@ export class StartScreen {
     handleMouseUp(event) {
         const coords = this.getCanvasCoordinates(event.clientX, event.clientY);
 
-        if (this.showSettings) {
+        if (this.menuState === 'settings') {
             this.handleSettingsTouch(coords.x, coords.y);
             return;
         }
@@ -1508,7 +1509,7 @@ export class StartScreen {
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.settings)) {
-                this.showSettings = true;
+                this.menuState = 'settings';
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
@@ -1647,42 +1648,92 @@ export class StartScreen {
         ctx.save();
         
         // Background
-        this.renderBackground();
-        
+        // this.renderBackground(); // Moved into specific menuState blocks
+
         // Calculate font sizes
         const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
         const titleSize = Math.max(28, 42 * scale);
         const instructionSize = Math.max(11, 14 * scale);
         
         // Large top logo (Home/Solo/Multiplayer/Upgrades)
-        if (this.assetLoader && this.assetLoader.getImage('intro_logo')) {
-            this.renderLogo();
-        } else {
-            // Fallback to text if image not loaded
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${titleSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY);
-        }
+        // this.renderLogo(); // Moved into specific menuState blocks
         
         
         if (this.menuState === 'home') {
+            this.renderBackground();
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) {
+                this.renderLogo();
+            } else {
+                // Fallback to text if image not loaded
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${titleSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY);
+            }
             this.renderHomeMenu();
             this.hideMultiplayerLobbyDom();
+        } else if (this.menuState === 'settings') {
+            this.renderBackground(); // Added
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) { // Added
+                this.renderLogo(); // Added
+            } else { // Added
+                ctx.fillStyle = '#ffffff'; // Added
+                ctx.font = `bold ${titleSize}px Arial`; // Added
+                ctx.textAlign = 'center'; // Added
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY); // Added
+            } // Added
+            this.drawSettingsOverlay(ctx);
+            this.hideMultiplayerLobbyDom();
         } else if (this.menuState === 'multiplayer') {
+            this.renderBackground(); // Added
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) { // Added
+                this.renderLogo(); // Added
+            } else { // Added
+                ctx.fillStyle = '#ffffff'; // Added
+                ctx.font = `bold ${titleSize}px Arial`; // Added
+                ctx.textAlign = 'center'; // Added
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY); // Added
+            } // Added
             this.renderBackButton();
             this.renderMultiplayerPlaceholder();
             this.showMultiplayerLobbyDom();
         } else if (this.menuState === 'profileStats') {
+            this.renderBackground(); // Added
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) { // Added
+                this.renderLogo(); // Added
+            } else { // Added
+                ctx.fillStyle = '#ffffff'; // Added
+                ctx.font = `bold ${titleSize}px Arial`; // Added
+                ctx.textAlign = 'center'; // Added
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY); // Added
+            } // Added
             this.renderBackButton();
             this.renderProfileStatsScreen();
             this.hideMultiplayerLobbyDom();
         } else if (this.menuState === 'upgrades') {
+            this.renderBackground(); // Added
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) { // Added
+                this.renderLogo(); // Added
+            } else { // Added
+                ctx.fillStyle = '#ffffff'; // Added
+                ctx.font = `bold ${titleSize}px Arial`; // Added
+                ctx.textAlign = 'center'; // Added
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY); // Added
+            } // Added
             this.renderBackButton();
             this.renderUpgradesScreen();
             this.hideMultiplayerLobbyDom();
         } else {
             // Solo
+            this.renderBackground(); // Added
+            if (this.assetLoader && this.assetLoader.getImage('intro_logo')) { // Added
+                this.renderLogo(); // Added
+            } else { // Added
+                ctx.fillStyle = '#ffffff'; // Added
+                ctx.font = `bold ${titleSize}px Arial`; // Added
+                ctx.textAlign = 'center'; // Added
+                ctx.fillText('BATTLE-2D-EATH', this.canvas.width / 2, this.titleY); // Added
+            } // Added
             this.renderBackButton();
             this.hideMultiplayerLobbyDom();
 
@@ -1733,11 +1784,7 @@ export class StartScreen {
 
     renderHomeMenu() {
         const ctx = this.ctx;
-        const scale = Math.min(this.canvas.width / 720, this.canvas.height / 1280);
-        const headingSize = Math.max(18, 22 * scale);
-
-        ctx.save();
-
+        
         // Refresh profile so post-match rewards show immediately.
         this.profile = loadProfile();
 
@@ -1746,12 +1793,8 @@ export class StartScreen {
         this.renderMenuButton(this.homeButtons.solo, '#4ade80');
         this.renderMenuButton(this.homeButtons.multiplayer, '#60a5fa');
         this.renderMenuButton(this.homeButtons.upgrades, '#e5e7eb', '#111827');
-    this.renderMenuButton(this.homeButtons.settings, '#9ca3af', '#111827');
+        this.renderMenuButton(this.homeButtons.settings, '#9ca3af', '#111827');
         this.renderMenuButton(this.homeButtons.editor, '#fbbf24');
-
-    if (this.showSettings) {
-        this.drawSettingsOverlay(ctx);
-    }
 
         ctx.restore();
     }
