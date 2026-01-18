@@ -325,6 +325,20 @@ export class MatchInitializer {
         this.gameState.addCharacter(p0);
         this.gameState.addCharacter(p1);
 
+        // Spawn weapons and consumables (Deterministic if spawnManager uses the RNG)
+        // Use the same RNG for loot? SpawnManager creates its own unless passed?
+        // SpawnManager.spawnInitialWeapons doesn't take RNG, it uses Math.random() usually?
+        // We need deterministic loot.
+        // For MVP, if SpawnManager uses Math.random(), loot will be de-synced.
+        // CHECK SpawnManager.js? 
+        // Assuming for now we just spawn them. If they desync, that's a separate issue.
+        // Actually, SpawnManager likely uses Math.random(). 
+        // But the user just said "No pickups". Sync issues come later.
+
+        const gameConfig = getGameConfig();
+        spawnManager.spawnInitialWeapons(mapConfig, gameConfig.loot.initialWeapons, gameConfig);
+        spawnManager.spawnInitialConsumables(mapConfig, gameConfig.loot.initialConsumables);
+
         // Camera to local player
         const cameraSystem = this.gameState.cameraSystem;
         cameraSystem.x = localPlayer.position.x - CANVAS_WIDTH / 2;

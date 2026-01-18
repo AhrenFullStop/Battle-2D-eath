@@ -8,8 +8,8 @@ export class Player extends Character {
      * @param {Object} config - Player configuration
      */
     constructor(config) {
-        // Mark as player
-        config.isPlayer = true;
+        // Mark as player (default to true if not specified)
+        if (config.isPlayer === undefined) config.isPlayer = true;
         super(config);
         
         // Player-specific properties
