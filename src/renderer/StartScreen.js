@@ -108,7 +108,6 @@ export class StartScreen {
             solo: { x: this.canvas.width / 2, y: this.canvas.height * 0.46, width: 260 * scale, height: 54 * scale, text: 'SOLO' },
             multiplayer: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 74 * scale, width: 260 * scale, height: 54 * scale, text: 'MULTIPLAYER' },
             upgrades: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'UPGRADES' },
-            upgrades: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 148 * scale, width: 260 * scale, height: 54 * scale, text: 'UPGRADES' },
             settings: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 222 * scale, width: 260 * scale, height: 54 * scale, text: 'SETTINGS' },
             editor: { x: this.canvas.width / 2, y: this.canvas.height * 0.46 + 296 * scale, width: 260 * scale, height: 54 * scale, text: 'MAP EDITOR' }
         };
@@ -1255,6 +1254,11 @@ export class StartScreen {
         const touch = event.touches[0];
         const coords = this.getCanvasCoordinates(touch.clientX, touch.clientY);
 
+    if (this.showSettings) {
+        this.handleSettingsTouch(coords.x, coords.y);
+        return;
+    }
+
         if (this.menuState !== 'solo') {
             this.isDragging = false;
             this.isDraggingMaps = false;
@@ -1305,6 +1309,10 @@ export class StartScreen {
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.upgrades)) {
                 this.menuState = 'upgrades';
+                return null;
+            }
+            if (this.isPointInButton(coords.x, coords.y, this.homeButtons.settings)) {
+                this.showSettings = true;
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
@@ -1469,6 +1477,10 @@ export class StartScreen {
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.upgrades)) {
                 this.menuState = 'upgrades';
+                return null;
+            }
+            if (this.isPointInButton(coords.x, coords.y, this.homeButtons.settings)) {
+                this.showSettings = true;
                 return null;
             }
             if (this.isPointInButton(coords.x, coords.y, this.homeButtons.editor)) {
@@ -1706,7 +1718,12 @@ export class StartScreen {
         this.renderMenuButton(this.homeButtons.solo, '#4ade80');
         this.renderMenuButton(this.homeButtons.multiplayer, '#60a5fa');
         this.renderMenuButton(this.homeButtons.upgrades, '#e5e7eb', '#111827');
+    this.renderMenuButton(this.homeButtons.settings, '#9ca3af', '#111827');
         this.renderMenuButton(this.homeButtons.editor, '#fbbf24');
+
+    if (this.showSettings) {
+        this.drawSettingsOverlay(ctx);
+    }
 
         ctx.restore();
     }
@@ -3141,6 +3158,12 @@ export class StartScreen {
     checkStartRequested() {
         const requested = this.menuState === 'solo' && this.startRequested;
         this.startRequested = false;
+
+    // Initialize/resume audio context on user interaction (Start Game)
+    if (requested && window.game && window.game.audioManager) {
+        window.game.audioManager.init();
+    }
+
         return requested;
     }
 
@@ -3165,5 +3188,7 @@ export class StartScreen {
             selectedMap: rawSession.selectedMap,
             isHost: rawSession.role === 'host'
         };
+    }
+}
     }
 }
