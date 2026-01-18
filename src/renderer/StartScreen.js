@@ -222,6 +222,15 @@ export class StartScreen {
         root.className = 'mp-lobby';
         document.body.appendChild(root);
 
+        // Map options (simple for now)
+        const mapOptions = this.availableMaps.length > 0 ? this.availableMaps : [{ name: 'Default', file: 'facey.json' }];
+
+        // Character options
+        const charOptions = [
+            { id: 'bolt', name: 'Bolt' },
+            { id: 'boulder', name: 'Boulder' }
+        ];
+
         // Wizard UI Structure
         root.innerHTML = `
             <div class="mp-panel mp-wizard-panel">
@@ -294,7 +303,39 @@ export class StartScreen {
                     <div class="mp-status-msg">Waiting for Host to connect...</div>
                 </div>
 
-                <!-- STEP: CONNECTED / LOBBY -->
+                <!-- STEP 3: SETUP (Map & Character) -->
+                <div class="mp-step hidden" data-step="setup">
+                    <div class="mp-lobby-status">
+                        <div class="mp-connection-dot connected"></div>
+                        <span>Setup Match</span>
+                    </div>
+
+                    <div class="mp-section-title">Select Map <span data-mp="hostOnlyTag" style="font-size:10px; opacity:0.6; margin-left:5px;">(Host Only)</span></div>
+                    <div class="mp-scroll-x" data-mp="mapSelectContainer">
+                        ${mapOptions.map((m, i) => `
+                            <div class="mp-option-card ${i === 0 ? 'selected' : ''}" data-mp-map="${i}">
+                                <div class="mp-card-name">${m.name}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="mp-section-title" style="margin-top:15px;">Select Character</div>
+                    <div class="mp-scroll-x" data-mp="charSelectContainer">
+                        ${charOptions.map((c, i) => `
+                            <div class="mp-option-card ${i === 0 ? 'selected' : ''}" data-mp-char="${c.id}">
+                                <div class="mp-card-name">${c.name}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="mp-actions-center" style="margin-top: 20px;">
+                         <button class="mp-btn mp-ready-btn" data-mp="btnToggleReady">Ready to Battle</button>
+                    </div>
+                    <div class="mp-countdown" data-mp="countdown"></div>
+                </div>
+
+                <!-- STEP: CONNECTED / LOBBY (OLD) -->
+                <!-- This step is now replaced by 'setup' -->
                 <div class="mp-step hidden" data-step="lobby">
                     <div class="mp-lobby-status">
                         <div class="mp-connection-dot connected"></div>
@@ -324,8 +365,10 @@ export class StartScreen {
             hostAnswerInput: q('[data-mp="hostAnswerInput"]'),
             joinOfferInput: q('[data-mp="joinOfferInput"]'),
             joinAnswerDisplay: q('[data-mp="joinAnswerDisplay"]'),
-            mapName: q('[data-mp="mapName"]'),
             countdown: q('[data-mp="countdown"]'),
+            mapContainer: q('[data-mp="mapSelectContainer"]'),
+            charContainer: q('[data-mp="charSelectContainer"]'),
+            hostOnlyTag: q('[data-mp="hostOnlyTag"]'),
             btns: {
                 host: q('[data-mp="btnHost"]'),
                 join: q('[data-mp="btnJoin"]'),
@@ -354,6 +397,13 @@ export class StartScreen {
             }
         };
 
+        // Initial Selection State
+        let selectedMapIndex = 0;
+        let selectedCharId = 'bolt';
+        // Initialize mp session data
+        this.mp.mapFile = mapOptions[0].file;
+        this.mp.characterType = 'bolt';
+
         // Clean up helper
         const shutdown = () => {
             if (this.mp.connection) {
@@ -378,14 +428,23 @@ export class StartScreen {
                     setStatus('Connected');
                     els.playerCount.textContent = 'Players: 2/2';
                     els.playerCount.style.color = '#4ade80'; // green
-                    setStep('lobby');
+                    setStep('setup');
+
+                    // Client: disable map selection visuals
+                    if (this.mp.role === 'client') {
+                        els.mapContainer.classList.add('disabled-container');
+                        els.hostOnlyTag.style.opacity = '1';
+                    } else {
+                        els.mapContainer.classList.remove('disabled-container');
+                        els.hostOnlyTag.style.display = 'none';
+                        // Host sends initial map
+                        send({ type: 'map_select', mapIndex: selectedMapIndex, mapFile: mapOptions[selectedMapIndex].file });
+                    }
                 } else {
                     setStatus(s); // e.g. 'connecting...'
                     if (s === 'closed' || s === 'disconnected') {
                         els.playerCount.textContent = 'Players: 1/2';
                         els.playerCount.style.color = '';
-                        // If we were in lobby, maybe go back to landing?
-                        // For now keep state but warn user
                     }
                 }
             };
@@ -401,6 +460,16 @@ export class StartScreen {
                             tryStartCountdownHost();
                         } else if (this.mp.role === 'host') { // cancel if someone unreadied
                             cancelCountdownHost();
+                        }
+                        break;
+                    case 'map_select':
+                        if (this.mp.role === 'client') {
+                            const idx = msg.mapIndex;
+                            if (typeof idx === 'number' && mapOptions[idx]) {
+                                selectedMapIndex = idx;
+                                this.mp.mapFile = msg.mapFile;
+                                updateSelectionVisuals();
+                            }
                         }
                         break;
                     case 'countdown_start':
@@ -419,16 +488,24 @@ export class StartScreen {
                         // CLIENT START
                         if (this.mp.role === 'client') {
                             this.multiplayerStartRequested = true;
+                            // Store session fully
                             this.multiplayerStartSession = {
                                 role: 'client',
                                 seed: msg.seed,
                                 mapFile: msg.mapFile,
-                                connection: this.mp.connection
-                            };
+                                 characterType: selectedCharId, // My Selected Character
+                                 connection: this.mp.connection,
+                                 selectedMap: mapOptions.find(m => m.file === msg.mapFile)
+                             };
+                            // StartScreen checks this property in render()
                         }
                         break;
                 }
             };
+        };
+
+        const send = (payload) => {
+            if (this.mp.connection) this.mp.connection.send(payload);
         };
 
         const tryStartCountdownHost = () => {
@@ -438,36 +515,31 @@ export class StartScreen {
             this.mp.countdown = { active: true, secondsLeft: seconds, endsAtMs };
 
             // Send to client
-            if (this.mp.connection) {
-                this.mp.connection.send({
-                    type: 'countdown_start',
-                    seconds,
-                    endsAtMs
-                });
-            }
+            send({
+                type: 'countdown_start',
+                seconds,
+                endsAtMs
+            });
             requestAnimationFrame(runCountdown);
         };
 
         const cancelCountdownHost = () => {
             this.mp.countdown = { active: false, secondsLeft: 0, endsAtMs: 0 };
-            if (this.mp.connection) this.mp.connection.send({ type: 'countdown_cancel' });
+            send({ type: 'countdown_cancel' });
             render();
         };
 
         const finalizeStartHost = () => {
-            // HOST START - CRASH FIX HERE
-            // Ensure mapFile is present
+            // HOST START
             const mapFile = this.mp.mapFile || 'facey.json';
             const seed = this.mp.seed || (Math.floor(Math.random() * 4294967296));
 
             // Send start to client
-            if (this.mp.connection) {
-                this.mp.connection.send({
-                    type: 'start',
-                    seed: seed,
-                    mapFile: mapFile
-                });
-            }
+            send({
+                type: 'start',
+                seed: seed,
+                mapFile: mapFile
+            });
 
             // Trigger local start
             this.multiplayerStartRequested = true;
@@ -475,7 +547,9 @@ export class StartScreen {
                 role: 'host',
                  seed: seed,
                  mapFile: mapFile,
-                 connection: this.mp.connection
+                 characterType: selectedCharId, // My Selected Character
+                 connection: this.mp.connection,
+                 selectedMap: mapOptions.find(m => m.file === mapFile)
              };
         };
 
@@ -521,8 +595,22 @@ export class StartScreen {
                     qr.addData(this.mp.joinLink);
                     qr.make();
                     els.hostQr.innerHTML = qr.createImgTag(3, 4);
-                } catch (e) { }
-            }
+                 } catch (e) { }
+             }
+        };
+
+        const updateSelectionVisuals = () => {
+            // Update Maps
+            els.mapContainer.querySelectorAll('.mp-option-card').forEach((el, i) => {
+                if (i === selectedMapIndex) el.classList.add('selected');
+                else el.classList.remove('selected');
+            });
+
+            // Update Chars
+            els.charContainer.querySelectorAll('.mp-option-card').forEach((el) => {
+                if (el.dataset.mpChar === selectedCharId) el.classList.add('selected');
+                else el.classList.remove('selected');
+            });
         };
 
 
@@ -592,9 +680,9 @@ export class StartScreen {
             // Try to be smart if they pasted a full URL
             if (offer.includes('#join=')) {
                 try {
-                     const b64 = offer.split('#join=')[1];
-                     cleanOffer = atob(b64);
-                 } catch (e) { }
+                    const b64 = offer.split('#join=')[1];
+                    cleanOffer = atob(b64);
+                  } catch (e) { }
              }
 
             if (!cleanOffer) return;
@@ -635,6 +723,31 @@ export class StartScreen {
                  // Host checks start in onMessage ('ready')
              }
             render();
+        });
+
+        // Card Clicks (Delegated)
+        els.mapContainer.addEventListener('click', (e) => {
+            if (this.mp.role !== 'host') return;
+            const card = e.target.closest('.mp-option-card');
+            if (card) {
+                const idx = parseInt(card.dataset.mpMap);
+                if (!isNaN(idx)) {
+                    selectedMapIndex = idx;
+                    this.mp.mapFile = mapOptions[idx].file;
+                    updateSelectionVisuals();
+                    // Send update to client
+                    send({ type: 'map_select', mapIndex: idx, mapFile: this.mp.mapFile });
+                }
+            }
+        });
+
+        els.charContainer.addEventListener('click', (e) => {
+            const card = e.target.closest('.mp-option-card');
+            if (card) {
+                selectedCharId = card.dataset.mpChar;
+                this.mp.characterType = selectedCharId;
+                updateSelectionVisuals();
+            }
         });
 
 

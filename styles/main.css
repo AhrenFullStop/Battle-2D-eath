@@ -246,3 +246,65 @@ body {
     background: #4ade80;
     color: #000;
 }
+/* Setup Step Styles */
+.mp-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 8px;
+}
+
+.mp-scroll-x {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.mp-scroll-x::-webkit-scrollbar {
+    height: 6px;
+}
+
+.mp-scroll-x::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.mp-option-card {
+    flex: 0 0 120px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.mp-option-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.mp-option-card.selected {
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.1);
+}
+
+.mp-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 1;
+}
+
+.disabled-container {
+    opacity: 0.5;
+    pointer-events: none;
+    filter: grayscale(1);
+}
