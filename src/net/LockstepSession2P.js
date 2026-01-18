@@ -105,6 +105,7 @@ export class LockstepSession2P {
         const tick = msg.tick;
         if (!Number.isInteger(tick) || tick < 0) return;
         const frame = msg.frame;
+        // console.log(`[Lockstep] Received tick ${tick} from remote`);
         if (!frame || frame.p !== INPUT_PROTOCOL) return;
 
         const bucket = this.inputByTick.get(tick) || [null, null];
@@ -121,6 +122,7 @@ export class LockstepSession2P {
     sendLocalInputForTick(tick, frame) {
         if (this.sentTicks.has(tick)) return;
         this.sentTicks.add(tick);
+        // console.log(`[Lockstep] Sending tick ${tick}`, frame);
         this.transport.send({ type: 'input', tick, frame });
     }
 
@@ -149,11 +151,16 @@ export class LockstepSession2P {
         if (!this.started) return false;
 
         if (this.nextTickToSimulate < this.inputDelayTicks) {
+            // console.log(`[Lockstep] Simulating neutral tick ${this.nextTickToSimulate}`);
             return true;
         }
 
         const bucket = this.inputByTick.get(this.nextTickToSimulate);
-        return !!bucket && !!bucket[0] && !!bucket[1];
+        const canSim = !!bucket && !!bucket[0] && !!bucket[1];
+        if (!canSim && Math.random() < 0.01) {
+            console.log(`[Lockstep] Stalled at ${this.nextTickToSimulate}. Bucket:`, bucket);
+        }
+        return canSim;
     }
 
     popNextTickInputs() {
