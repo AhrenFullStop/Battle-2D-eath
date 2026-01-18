@@ -1126,15 +1126,16 @@ export class StartScreen {
         // Multiplayer cleanup
         if (!options.preserveMultiplayerConnection) {
             this.shutdownMultiplayerLobby();
+
+            // Initial cleanup
+            if (this.mpDom && this.mpDom.root && this.mpDom.root.parentNode) {
+                this.mpDom.root.parentNode.removeChild(this.mpDom.root);
+            }
+            this.mpDom = null;
         } else {
             // Hide UI-only pieces but keep the active RTCPeerConnection alive.
             this.hideMultiplayerLobbyDom();
         }
-        this.hideMultiplayerLobbyDom();
-        if (this.mpDom && this.mpDom.root && this.mpDom.root.parentNode) {
-            this.mpDom.root.parentNode.removeChild(this.mpDom.root);
-        }
-        this.mpDom = null;
     }
     
     getCanvasCoordinates(clientX, clientY) {

@@ -127,7 +127,8 @@ export class MatchInitializer {
         this.gameState.cameraSystem = cameraSystem;
 
         // Create spawn manager (no AI system for multiplayer)
-        const spawnManager = new SpawnManager(this.gameState, selectedMap.mapData?.obstacles || [], null);
+        const mapConfig = getCurrentMapConfig();
+        const spawnManager = new SpawnManager(this.gameState, mapConfig.obstacles || [], null);
 
         // Setup event listeners for stats tracking
         this.setupEventListeners(eventBus, profile);
